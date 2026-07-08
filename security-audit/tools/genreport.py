@@ -259,9 +259,26 @@ class H(BaseHTTPRequestHandler):
 HTTPServer(("127.0.0.1",8082), H).serve_forever()
 """,
  },
- fix="""<p><code>CURLOPT_MAXFILESIZE_LARGE</code> + a hard cap in <code>writeCallback</code> (abort once
- exceeded) + <code>CURLOPT_CONNECTTIMEOUT</code>.</p>""",
- config="""<code>setMaxDownloadSize</code> (default ~32 MiB), configurable. <code>setConnectTimeout</code>.""",
+ fix="""<p><code>DefaultResourceFetcher::fetchUrl</code> now sets <code>CURLOPT_MAXFILESIZE_LARGE</code>
+ (immediate rejection if an advertised size, e.g. <code>Content-Length</code>, exceeds the cap) and
+ <code>CURLOPT_CONNECTTIMEOUT</code>. <code>CURLOPT_MAXFILESIZE_LARGE</code> only checks a size
+ <em>known in advance</em>; a <em>chunked encoding</em> response advertises none and can therefore
+ bypass it entirely. To close this gap, <code>CURLOPT_WRITEDATA</code> now points to a small
+ <code>WriteCallbackContext</code> struct (<code>ByteArray*</code> + cap) instead of a bare
+ <code>ByteArray*</code>: <code>writeCallback</code> thus knows the cap and, as soon as the
+ accumulated size would exceed it, returns a short count (0) &mdash; which curl treats as a write
+ error and aborts the transfer immediately (<code>CURLE_WRITE_ERROR</code>), regardless of the
+ transfer shape (chunked or not). Both failure codes (<code>CURLE_FILESIZE_EXCEEDED</code> and
+ <code>CURLE_WRITE_ERROR</code>) are translated into a clear, specific error message (max size
+ exceeded) instead of the generic <code>curl_easy_strerror</code>. The non-curl branch (local file
+ read via <code>tellg</code>) does not apply this cap: the size is known in advance there and read
+ in a single bounded allocation, which doesn't match the threat model (endless remote stream);
+ adding a cap there would risk silently truncating a legitimate large local file for no matching
+ benefit.</p>""",
+ config="""<code>DefaultResourceFetcher::setMaxDownloadSize(size_t)</code> knob (member
+ <code>m_maxDownloadSize</code>, default 32&nbsp;MiB; <code>0</code> = unlimited) and
+ <code>setConnectTimeout(int)</code> (member <code>m_connectTimeout</code>, default 30&nbsp;s).""",
+ status="done",
 )
 
 add(

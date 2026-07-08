@@ -615,6 +615,18 @@ public:
     void setTimeout(int timeout) { m_timeout = timeout; }
 
     /**
+     * @brief Sets the maximum time allowed to establish a connection.
+     *
+     * This bounds only the connection phase (DNS lookup plus TCP/TLS handshake); it is independent
+     * of `setTimeout()`, which bounds the entire request including the transfer itself.
+     *
+     * If not set, the default connect timeout is 30 seconds.
+     *
+     * @param seconds Connection timeout duration in seconds.
+     */
+    void setConnectTimeout(int seconds) { m_connectTimeout = seconds; }
+
+    /**
      * @brief Sets the list of URL schemes allowed to be fetched.
      *
      * The list is a comma-separated set of scheme names (e.g. `"http,https,data"`). Schemes not in
@@ -673,6 +685,22 @@ public:
     size_t maxFontBytes() const { return m_maxFontBytes; }
 
     /**
+     * @brief Sets the maximum size, in bytes, accepted for a single fetched resource.
+     *
+     * A response whose advertised size (e.g. the `Content-Length` header) exceeds this limit is
+     * rejected before its body is downloaded. A chunked or otherwise streamed response never
+     * advertises a size up front, so that check alone cannot bound it; this same limit is therefore
+     * also enforced as a hard cap on the bytes accumulated so far while the transfer is in progress,
+     * aborting it as soon as the cap would be exceeded regardless of whether a size was advertised.
+     *
+     * If not set, the default is 32 MiB (`32 * 1024 * 1024`). Passing `0` disables the limit,
+     * allowing unbounded downloads.
+     *
+     * @param bytes The maximum accepted resource size, in bytes, or `0` for no limit.
+     */
+    void setMaxDownloadSize(size_t bytes) { m_maxDownloadSize = bytes; }
+
+    /**
      * @brief Fetches the resource at the specified URL.
      *
      * Equivalent to `fetchUrl(url, false)`: treats the request as an untrusted sub-resource fetch,
@@ -715,10 +743,12 @@ private:
     bool m_followRedirects = true;
     int m_maxRedirects = 30;
     int m_timeout = 300;
+    int m_connectTimeout = 30;
 
     std::string m_allowedProtocols = "http,https,data";
     bool m_allowLocalNetwork = false;
     size_t m_maxFontBytes = 8 * 1024 * 1024;
+    size_t m_maxDownloadSize = 32 * 1024 * 1024;
 
     friend DefaultResourceFetcher* defaultResourceFetcher();
 };
