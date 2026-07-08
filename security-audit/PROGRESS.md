@@ -11,7 +11,7 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 
 | Fait | ID | Problème | Sévérité | Commit |
 |:----:|----|----------|----------|--------|
-| [ ] | V01 | SSRF / fetch multi-schéma | Critique | — |
+| [x] | V01 | SSRF / fetch multi-schéma | Critique | voir `git log` (commit courant) |
 | [ ] | V02 | Lecture fichiers `file://` + traversal | Critique | — |
 | [ ] | V03 | Octets de police → FreeType | Haute | — |
 | [ ] | V04 | Taille de téléchargement | Haute | — |

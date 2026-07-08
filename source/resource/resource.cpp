@@ -196,6 +196,17 @@ static ResourceData loadDataUrl(std::string_view input)
     return ResourceData(content->data(), content->size(), mimeType, textEncoding, ByteArrayDestroy, content);
 }
 
+static UrlValidator& globalUrlValidator()
+{
+    static UrlValidator validator;
+    return validator;
+}
+
+void setUrlValidator(UrlValidator validator)
+{
+    globalUrlValidator() = std::move(validator);
+}
+
 static bool mimeTypeFromPath(std::string& mimeType, std::string_view path)
 {
     auto index = path.rfind('.');
@@ -272,6 +283,81 @@ static size_t writeCallback(const char* contents, size_t blockSize, size_t numbe
     return totalSize;
 }
 
+static std::string curlAllowedProtocols(std::string_view allowedProtocols)
+{
+    std::string result;
+    while(!allowedProtocols.empty()) {
+        auto comma = allowedProtocols.find(',');
+        auto scheme = allowedProtocols.substr(0, comma);
+        stripLeadingAndTrailingSpaces(scheme);
+        if(!scheme.empty() && !equals(scheme, "data", false)) {
+            if(!result.empty())
+                result += ',';
+            result.append(scheme);
+        }
+
+        if(comma == std::string_view::npos)
+            break;
+        allowedProtocols.remove_prefix(comma + 1);
+    }
+
+    return result;
+}
+
+static bool parseIPv4Address(std::string_view address, uint8_t octets[4])
+{
+    for(int index = 0;; ++index) {
+        auto dot = address.find('.');
+        auto part = address.substr(0, dot);
+        if(index >= 4 || part.empty() || part.length() > 3)
+            return false;
+        unsigned value = 0;
+        for(char cc : part) {
+            if(!isDigit(cc))
+                return false;
+            value = value * 10 + (cc - '0');
+        }
+
+        if(value > 255)
+            return false;
+        octets[index] = static_cast<uint8_t>(value);
+        if(dot == std::string_view::npos)
+            return index == 3;
+        address.remove_prefix(dot + 1);
+    }
+}
+
+static bool isLocalOrPrivateAddress(const char* address)
+{
+    if(address == nullptr)
+        return false;
+    std::string_view input(address);
+    if(input.find(':') != std::string_view::npos) {
+        if(equals(input, "::1", true))
+            return true; // loopback
+        return input.length() >= 3 && (input[0] == 'f' || input[0] == 'F')
+            && (input[1] == 'e' || input[1] == 'E')
+            && (input[2] == '8' || input[2] == '9' || input[2] == 'a' || input[2] == 'A' || input[2] == 'b' || input[2] == 'B'); // fe80::/10 link-local
+    }
+
+    uint8_t o[4];
+    if(!parseIPv4Address(input, o))
+        return false;
+    if(o[0] == 127) return true; // 127.0.0.0/8 loopback
+    if(o[0] == 169 && o[1] == 254) return true; // 169.254.0.0/16 link-local
+    if(o[0] == 10) return true; // 10.0.0.0/8 private
+    if(o[0] == 172 && o[1] >= 16 && o[1] <= 31) return true; // 172.16.0.0/12 private
+    if(o[0] == 192 && o[1] == 168) return true; // 192.168.0.0/16 private
+    return false;
+}
+
+static int prereqCallback(void*, char* connPrimaryIp, char*, int, int)
+{
+    if(isLocalOrPrivateAddress(connPrimaryIp))
+        return CURL_PREREQFUNC_ABORT;
+    return CURL_PREREQFUNC_OK;
+}
+
 ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url)
 {
     if(startswith(url, "data:", false))
@@ -301,6 +387,12 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url)
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, m_followRedirects);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, m_maxRedirects);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, m_timeout);
+
+    auto allowedProtocols = curlAllowedProtocols(m_allowedProtocols);
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, allowedProtocols.data());
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, allowedProtocols.data());
+    if(!m_allowLocalNetwork)
+        curl_easy_setopt(curl, CURLOPT_PREREQFUNCTION, prereqCallback);
 
     auto response = curl_easy_perform(curl);
     if(response == CURLE_OK) {
@@ -370,6 +462,12 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url)
 
 ResourceData ResourceLoader::loadUrl(const Url& url, ResourceFetcher* customFetcher)
 {
+    const auto& validator = globalUrlValidator();
+    if(validator && !validator(url.value())) {
+        plutobook_set_error_message("Unable to fetch URL '%s': rejected by URL validator", url.value().data());
+        return ResourceData();
+    }
+
     if(url.protocolIs("data"))
         return loadDataUrl(percentDecode(url.value()));
     if(customFetcher == nullptr)

@@ -104,6 +104,7 @@ with socketserver.TCPServer(("127.0.0.1", 8081), H) as s:
  config="""Defaut : schemas autorises = <code>http,https,data</code>. Reactivation explicite des schemas
  dangereux via <code>ResourceFetcher::setAllowedProtocols(&hellip;)</code>. Validateur d'URL via
  <code>setUrlValidator(cb)</code> couvrant fetcher curl ET handler custom.""",
+ status="done",
 )
 
 add(

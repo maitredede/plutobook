@@ -687,6 +687,31 @@ PLUTOBOOK_API void plutobook_set_http_max_redirects(int amount);
 PLUTOBOOK_API void plutobook_set_http_timeout(int timeout);
 
 /**
+ * @brief Defines a callback type for validating a URL before it is fetched.
+ *
+ * The callback is invoked before any resource is fetched, for both the default fetcher and any
+ * custom resource fetcher. It is independent of, and runs ahead of, the default fetcher's own
+ * protocol allowlist, so it can reject a URL for any reason (scheme, host, path, ...) before
+ * either check is applied. Return `false` to reject the URL.
+ *
+ * @param closure A user-defined pointer that will be passed to the callback (can be used for custom state or data).
+ * @param url The absolute URL about to be fetched.
+ * @return `true` to allow the fetch to proceed, `false` to reject it.
+ */
+typedef bool (*plutobook_url_validator_callback_t)(void* closure, const char* url);
+
+/**
+ * @brief Sets a global URL validator invoked before any resource fetch.
+ *
+ * If not set, no additional validation is performed beyond the protocol allowlist enforced by
+ * the default fetcher.
+ *
+ * @param callback A function pointer to the URL validator callback, or `NULL` to remove a previously set validator.
+ * @param closure A pointer to user-defined data to pass to the callback function.
+ */
+PLUTOBOOK_API void plutobook_set_url_validator(plutobook_url_validator_callback_t callback, void* closure);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {
