@@ -491,6 +491,18 @@ void plutobook_set_http_timeout(int timeout)
     plutobook::defaultResourceFetcher()->setTimeout(timeout);
 }
 
+void plutobook_set_url_validator(plutobook_url_validator_callback_t callback, void* closure)
+{
+    if(callback == nullptr) {
+        plutobook::setUrlValidator(nullptr);
+        return;
+    }
+
+    plutobook::setUrlValidator([callback, closure](std::string_view url) {
+        return callback(closure, std::string(url).data());
+    });
+}
+
 struct _plutobook final : public plutobook::Book, public plutobook::ResourceFetcher {
     _plutobook(plutobook_page_size_t size, plutobook_page_margins_t margins, plutobook_media_type_t media);
     plutobook::ResourceData fetchUrl(const std::string& url) final;

@@ -11,7 +11,7 @@ finding. One commit per finding (see `FIX-GUIDE.md`).
 
 | Done | ID | Finding | Severity | Commit |
 |:----:|----|----------|----------|--------|
-| [ ] | V01 | SSRF / multi-scheme fetch | Critical | — |
+| [x] | V01 | SSRF / multi-scheme fetch | Critical | see `git log` (current commit) |
 | [ ] | V02 | `file://` file read + traversal | Critical | — |
 | [ ] | V03 | Font bytes → FreeType | High | — |
 | [ ] | V04 | Download size | High | — |

@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <string>
 #include <memory>
+#include <functional>
 
 #include "plutobook.h"
 
@@ -594,6 +595,34 @@ public:
     void setTimeout(int timeout) { m_timeout = timeout; }
 
     /**
+     * @brief Sets the list of URL schemes allowed to be fetched.
+     *
+     * The list is a comma-separated set of scheme names (e.g. `"http,https,data"`). Schemes not in
+     * this list are rejected before any request is made, which also applies to redirects (a
+     * response cannot redirect to a scheme outside this list). `data` URLs are always decoded
+     * locally regardless of this setting and never reach the underlying transfer; listing `data`
+     * here only documents that it is treated as allowed.
+     *
+     * If not set, the default is `"http,https,data"`, meaning schemes such as `file`, `ftp`, or
+     * `gopher` are disabled unless explicitly re-enabled.
+     *
+     * @param protocols A comma-separated list of allowed URL schemes.
+     */
+    void setAllowedProtocols(std::string protocols) { m_allowedProtocols = std::move(protocols); }
+
+    /**
+     * @brief Enables or disables fetching resources from local/private network addresses.
+     *
+     * When disabled (the default), requests whose resolved destination address falls within a
+     * loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`, `fe80::/10`), or private
+     * (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) range are rejected. This guards against
+     * server-side request forgery targeting internal services from untrusted document content.
+     *
+     * @param allow Set to true to allow requests to local/private network addresses.
+     */
+    void setAllowLocalNetwork(bool allow) { m_allowLocalNetwork = allow; }
+
+    /**
      * @brief Fetches the resource at the specified URL.
      *
      * @param url The resource URL to fetch.
@@ -614,6 +643,9 @@ private:
     int m_maxRedirects = 30;
     int m_timeout = 300;
 
+    std::string m_allowedProtocols = "http,https,data";
+    bool m_allowLocalNetwork = false;
+
     friend DefaultResourceFetcher* defaultResourceFetcher();
 };
 
@@ -622,6 +654,29 @@ private:
  * @return A pointer to the singleton DefaultResourceFetcher instance.
  */
 DefaultResourceFetcher* defaultResourceFetcher();
+
+/**
+ * @brief A callback invoked to validate a URL before it is fetched.
+ *
+ * The validator runs before any resource is fetched, for both `DefaultResourceFetcher` and any
+ * custom `ResourceFetcher` set via `Book::setCustomResourceFetcher`. It is independent of, and
+ * runs ahead of, `DefaultResourceFetcher`'s own protocol allowlist, so it can reject a URL for any
+ * reason (scheme, host, path, ...) before either check is applied. Return `false` to reject the URL.
+ *
+ * @param url The absolute URL about to be fetched.
+ * @return `true` to allow the fetch to proceed, `false` to reject it.
+ */
+using UrlValidator = std::function<bool(std::string_view url)>;
+
+/**
+ * @brief Sets a global URL validator invoked before any resource fetch.
+ *
+ * If not set, no additional validation is performed beyond the protocol allowlist enforced by
+ * `DefaultResourceFetcher`. Pass an empty `UrlValidator` to remove a previously set validator.
+ *
+ * @param validator The validator callback, or an empty `UrlValidator` to disable validation.
+ */
+void setUrlValidator(UrlValidator validator);
 
 /**
  * @brief The OutputStream is an abstract base class for writing data to an output stream.

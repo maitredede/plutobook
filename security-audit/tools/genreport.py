@@ -104,6 +104,7 @@ with socketserver.TCPServer(("127.0.0.1", 8081), H) as s:
  config="""Default: allowed schemes = <code>http,https,data</code>. Dangerous schemes can be explicitly
  re-enabled via <code>ResourceFetcher::setAllowedProtocols(&hellip;)</code>. URL validator via
  <code>setUrlValidator(cb)</code>, covering both the curl fetcher AND a custom handler.""",
+ status="done",
 )
 
 add(
