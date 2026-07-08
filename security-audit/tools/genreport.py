@@ -370,9 +370,26 @@ add(
 <body><table><tr><td colspan="200000000">x</td></tr></table></body></html>
 """,
  },
- fix="""<p>Clamper <code>colspan</code>/<code>rowspan</code>/<code>col span</code> a un maximum ;
- repliquer le clamp deja present pour <code>rowSpan</code> (<code>tablebox.cpp:1364</code>).</p>""",
- config="Max colspan/span configurable, <strong>defaut 1000</strong> (valeur spec HTML).",
+ fix="""<p><code>HTMLTableCellElement::colSpan()</code>/<code>rowSpan()</code> et
+ <code>HTMLTableColElement::span()</code> (<code>source/htmldocument.cpp</code>) plafonnent desormais
+ la valeur brute de l'attribut via un helper <code>clampTableSpanMax()</code> (et
+ <code>clampTableSpan()</code>, qui y ajoute le minimum existant de 1) avant qu'elle n'atteigne
+ <code>tablebox.cpp</code> : la boucle <code>emplace</code> (<code>:1389-1400</code>) et la boucle
+ <code>col</code>/<code>colgroup</code> <code>span</code> (<code>:439-443</code>) restent inchangees
+ mais ne voient plus jamais une valeur non bornee. <code>rowSpan()</code> conserve la valeur spec
+ <code>0</code> (« jusqu'a la fin du groupe de lignes ») -- seul le maximum lui est applique, pas le
+ minimum -- et reste par ailleurs deja borne par le nombre de lignes reel dans
+ <code>TableSectionBox::build()</code> (<code>:1364-1376</code>, modele repris ici).</p>""",
+ config="""Nouvelle facade de configuration reutilisable <strong>EngineLimits</strong>
+ (<code>include/plutobook.hpp</code> + <code>include/plutobook.h</code>), accessible via le singleton
+ global <code>plutobook::engineLimits()</code> (meme style que
+ <code>plutobook::defaultResourceFetcher()</code>) : <code>setMaxTableSpan(uint32_t)</code> /
+ <code>maxTableSpan()</code>, <strong>defaut 1000</strong> (valeur spec HTML), <code>0</code> =
+ illimite. API C correspondante : <code>plutobook_set_max_table_span(unsigned int)</code>. Ce sera le
+ point d'ancrage pour les futures limites moteur (V07-V12 : profondeur d'imbrication, budget
+ d'expansion <code>&lt;use&gt;</code>, nombre de pages, longueur de compteur, <code>column-count</code>) --
+ voir la section C du guide de correctifs.""",
+ status="done",
 )
 
 add(

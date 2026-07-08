@@ -15,8 +15,8 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 | [x] | V02 | Lecture fichiers `file://` + traversal | Critique | 080c0ea |
 | [x] | V03 | Octets de police → FreeType | Haute | 5009198 |
 | [x] | V04 | Taille de téléchargement | Haute | 98950eb |
-| [x] | V05 | Bombe de décompression d'image | Haute | voir `git log` (commit courant) |
-| [ ] | V06 | colspan / col span | Haute | — |
+| [x] | V05 | Bombe de décompression d'image | Haute | 2806e2d |
+| [x] | V06 | colspan / col span | Haute | voir `git log` (commit courant) |
 | [ ] | V07 | Expansion SVG `<use>` | Haute | — |
 | [ ] | V08 | Récursion non bornée | Haute | — |
 | [ ] | V09 | Nombre de pages | Moyenne+ | — |

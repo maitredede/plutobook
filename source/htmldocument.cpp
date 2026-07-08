@@ -818,9 +818,26 @@ HTMLTableColElement::HTMLTableColElement(Document* document, const GlobalString&
 {
 }
 
+// Caps a table span-like value at EngineLimits::maxTableSpan() (0 there means "unlimited"). Without an
+// upper bound, a single huge span value forces the table layout code to insert billions of entries into
+// the column/cell grid while building the table.
+static unsigned clampTableSpanMax(unsigned value)
+{
+    if(auto maxSpan = engineLimits()->maxTableSpan())
+        value = std::min(value, maxSpan);
+    return value;
+}
+
+// Same as clampTableSpanMax(), also enforcing the existing minimum of 1 (used by colspan/span; rowspan
+// keeps 0 as a valid, spec-defined value meaning "extend to the end of the row group").
+static unsigned clampTableSpan(unsigned value)
+{
+    return clampTableSpanMax(std::max(1u, value));
+}
+
 unsigned HTMLTableColElement::span() const
 {
-    return parseNonNegativeIntegerAttribute(spanAttr).value_or(1);
+    return clampTableSpan(parseNonNegativeIntegerAttribute(spanAttr).value_or(1));
 }
 
 void HTMLTableColElement::collectAttributeStyle(std::string& output, const GlobalString& name, const HeapString& value) const
@@ -857,12 +874,15 @@ HTMLTableCellElement::HTMLTableCellElement(Document* document, const GlobalStrin
 
 unsigned HTMLTableCellElement::colSpan() const
 {
-    return std::max(1u, parseNonNegativeIntegerAttribute(colspanAttr).value_or(1));
+    return clampTableSpan(parseNonNegativeIntegerAttribute(colspanAttr).value_or(1));
 }
 
 unsigned HTMLTableCellElement::rowSpan() const
 {
-    return parseNonNegativeIntegerAttribute(rowspanAttr).value_or(1);
+    // Unlike colSpan()/span(), 0 is a valid, spec-defined rowspan value (see the rowSpan > 0 check in
+    // TableSectionBox::build(), tablebox.cpp) meaning "extend to the end of the row group", so it must
+    // not be clamped up to 1 here -- only the upper bound is enforced.
+    return clampTableSpanMax(parseNonNegativeIntegerAttribute(rowspanAttr).value_or(1));
 }
 
 void HTMLTableCellElement::collectAttributeStyle(std::string& output, const GlobalString& name, const HeapString& value) const

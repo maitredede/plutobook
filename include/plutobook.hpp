@@ -807,6 +807,57 @@ using UrlValidator = std::function<bool(std::string_view url)>;
 void setUrlValidator(UrlValidator validator);
 
 /**
+ * @brief The EngineLimits class holds configurable safety limits enforced by the rendering engine
+ * (parsing, layout, ...) to bound memory and time usage when processing untrusted document content.
+ *
+ * Each limit has a conservative default that does not affect legitimate documents, and can be
+ * reconfigured independently through its own setter. This is the shared home for engine-wide safety
+ * limits: further limits (e.g. nesting depth, SVG `<use>` expansion budget, page count,
+ * `@counter-style` representation length, `column-count`) are added here as additional
+ * member/setter/getter triples, following the pattern of `maxTableSpan` below -- no redesign needed.
+ */
+class PLUTOBOOK_API EngineLimits {
+public:
+    /**
+     * @brief Sets the maximum value accepted for a table's span attributes.
+     *
+     * This bounds the `colspan` and `rowspan` attributes of `<td>`/`<th>` cells, and the `span`
+     * attribute of `<col>`/`<colgroup>` elements. The HTML specification caps all three at 1000;
+     * without an upper bound, a single `colspan="200000000"` (or an equally large `rowspan`/`span`)
+     * forces the table layout code to insert billions of entries into the table's column/cell grid
+     * while building it, exhausting memory long before anything is painted.
+     *
+     * Values above this limit are clamped down to it; the existing minimum of 1 still applies below
+     * it (a span of 0 is treated as 1, per the HTML specification).
+     *
+     * If not set, the default is 1000, matching the HTML specification. Passing `0` disables the
+     * limit, allowing unbounded spans -- not recommended for untrusted input.
+     *
+     * @param max The maximum accepted span value, or `0` for no limit.
+     */
+    void setMaxTableSpan(uint32_t max) { m_maxTableSpan = max; }
+
+    /**
+     * @brief Returns the maximum value accepted for table span attributes.
+     * @return The configured span cap. See `setMaxTableSpan()`.
+     */
+    uint32_t maxTableSpan() const { return m_maxTableSpan; }
+
+private:
+    EngineLimits();
+
+    uint32_t m_maxTableSpan = 1000;
+
+    friend EngineLimits* engineLimits();
+};
+
+/**
+ * @brief Returns a singleton instance of EngineLimits.
+ * @return A pointer to the singleton EngineLimits instance.
+ */
+EngineLimits* engineLimits();
+
+/**
  * @brief The OutputStream is an abstract base class for writing data to an output stream.
  */
 class PLUTOBOOK_API OutputStream {

@@ -331,6 +331,14 @@ plutobook_resource_data_t* ResourceData::release()
     return std::exchange(m_data, nullptr);
 }
 
+EngineLimits::EngineLimits() = default;
+
+EngineLimits* engineLimits()
+{
+    static EngineLimits limits;
+    return &limits;
+}
+
 Book::Book(const PageSize& size, const PageMargins& margins, MediaType media)
     : m_pageSize(size)
     , m_pageMargins(margins)
