@@ -25,6 +25,7 @@
 
 #include <numbers>
 #include <cmath>
+#include <cstring>
 
 namespace plutobook {
 
@@ -43,6 +44,27 @@ private:
     ResourceData m_resource;
 };
 
+// `@font-face { src: url(...) }` bytes may come from any scheme (network, `data:`, local file, or a
+// custom ResourceFetcher) and are otherwise handed to FreeType unmodified. Before doing so, reject
+// anything that isn't at least plausibly a font: this doesn't validate the format, but it stops
+// arbitrary/garbage bytes (or a lying CSS `format()` hint -- see FontResource::supportsFormat) from
+// ever reaching the parser, cheaply, without needing to trust the declared format.
+static bool hasKnownFontSignature(const char* data, size_t length)
+{
+    constexpr size_t kMagicLength = 4;
+    if(data == nullptr || length < kMagicLength)
+        return false;
+
+    static const unsigned char sfntVersion[kMagicLength] = {0x00, 0x01, 0x00, 0x00};
+    return std::memcmp(data, sfntVersion, kMagicLength) == 0 // sfnt-wrapped TrueType/OpenType
+        || std::memcmp(data, "OTTO", kMagicLength) == 0 // OpenType with CFF outlines
+        || std::memcmp(data, "true", kMagicLength) == 0 // Apple TrueType
+        || std::memcmp(data, "typ1", kMagicLength) == 0 // Old-style PostScript Type 1 (sfnt-wrapped)
+        || std::memcmp(data, "ttcf", kMagicLength) == 0 // TrueType/OpenType collection
+        || std::memcmp(data, "wOFF", kMagicLength) == 0 // WOFF
+        || std::memcmp(data, "wOF2", kMagicLength) == 0; // WOFF2
+}
+
 FTFontData* FTFontData::create(ResourceData resource)
 {
     thread_local FT_Library ftLibrary;
@@ -51,6 +73,21 @@ FTFontData* FTFontData::create(ResourceData resource)
             plutobook_set_error_message("font decode error: %s", FT_Error_String(error));
             return nullptr;
         }
+    }
+
+    // Pre-validate size and magic bytes before handing anything to FreeType (and, for WOFF2, on to
+    // brotli): this is enforced here -- at the single point where font bytes reach the parser --
+    // rather than in the fetch layer, so it applies uniformly no matter which ResourceFetcher (the
+    // default curl/file-based one or a custom, embedder-supplied one) produced the bytes.
+    auto maxFontBytes = defaultResourceFetcher()->maxFontBytes();
+    if(resource.contentLength() > maxFontBytes) {
+        plutobook_set_error_message("font decode error: font size %zu bytes exceeds the %zu byte maximum", resource.contentLength(), maxFontBytes);
+        return nullptr;
+    }
+
+    if(!hasKnownFontSignature(resource.content(), resource.contentLength())) {
+        plutobook_set_error_message("font decode error: unrecognized font signature");
+        return nullptr;
     }
 
     FT_Face ftFace = nullptr;

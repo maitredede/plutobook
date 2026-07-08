@@ -202,9 +202,20 @@ open("evil.ttf","wb").write(b"\\x00\\x01\\x00\\x00" + b"\\x00"*8 + b"\\xff"*64)
 print("evil.ttf written (fuzz it under ASan)")
 """,
  },
- fix="""<p>Pre-validate size and magic bytes before <code>FT_New_Memory_Face</code>; enforce a format
- allowlist; document/pin the FreeType+brotli version. Apply the size cap (V04) to fonts too.</p>""",
- config="""Configurable max font size (reasonable default). Configurable accepted formats.""",
+ fix="""<p><code>FTFontData::create</code> (<code>source/resource/fontresource.cpp</code>) now checks,
+ before any call to <code>FT_New_Memory_Face</code>: (1) that the received byte size &le;
+ <code>DefaultResourceFetcher::maxFontBytes()</code>; (2) that the first 4 bytes match a known font
+ signature (sfnt <code>0x00010000</code>, <code>OTTO</code>, <code>true</code>, <code>typ1</code>,
+ <code>ttcf</code> collection, <code>wOFF</code>, <code>wOF2</code>). On failure: a clean error
+ message via <code>plutobook_set_error_message</code>, <code>nullptr</code> returned (falls back to
+ system fonts), no bytes ever reach FreeType/brotli. The check is enforced at the single point
+ where font bytes are about to be parsed, so it applies regardless of the source (default curl/file
+ fetcher or a custom <code>ResourceFetcher</code>) -- independent of <code>supportsFormat</code>,
+ which only filters on the CSS <code>format()</code> hint and can lie.</p>""",
+ config="""<code>DefaultResourceFetcher::setMaxFontBytes(size_t)</code> knob (member
+ <code>m_maxFontBytes</code>, default 8&nbsp;MiB) + <code>maxFontBytes()</code> accessor. Fixed
+ magic-byte allowlist (not configurable, pure security fix).""",
+ status="done",
 )
 
 add(

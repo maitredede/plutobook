@@ -12,8 +12,8 @@ finding. One commit per finding (see `FIX-GUIDE.md`).
 | Done | ID | Finding | Severity | Commit |
 |:----:|----|----------|----------|--------|
 | [x] | V01 | SSRF / multi-scheme fetch | Critical | acb32e3 |
-| [x] | V02 | `file://` file read + traversal | Critical | see `git log` (current commit) |
-| [ ] | V03 | Font bytes → FreeType | High | — |
+| [x] | V02 | `file://` file read + traversal | Critical | 080c0ea |
+| [x] | V03 | Font bytes → FreeType | High | (see current commit) |
 | [ ] | V04 | Download size | High | — |
 | [ ] | V05 | Image decompression bomb | High | — |
 | [ ] | V06 | colspan / col span | High | — |

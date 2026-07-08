@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V03 &middot; Raw font bytes passed straight to FreeType/brotli</h1>
 <p><span class="badge sev-high">High</span> &nbsp; <span class="muted">RCE surface (font parsing)</span></p>
 <div class="card">
-<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Status</b> <span class="status-done">fixed</span></div>
 <div class="kv"><b>Key file</b> <code>source/resource/fontresource.cpp:57</code></div>
 </div>
 
@@ -41,11 +41,21 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <ul><li><code>poc/repro.html</code></li><li><code>poc/make-evil-font.py</code></li></ul>
 
 <h2>Proposed fix</h2>
-<p>Pre-validate size and magic bytes before <code>FT_New_Memory_Face</code>; enforce a format
- allowlist; document/pin the FreeType+brotli version. Apply the size cap (V04) to fonts too.</p>
+<p><code>FTFontData::create</code> (<code>source/resource/fontresource.cpp</code>) now checks,
+ before any call to <code>FT_New_Memory_Face</code>: (1) that the received byte size &le;
+ <code>DefaultResourceFetcher::maxFontBytes()</code>; (2) that the first 4 bytes match a known font
+ signature (sfnt <code>0x00010000</code>, <code>OTTO</code>, <code>true</code>, <code>typ1</code>,
+ <code>ttcf</code> collection, <code>wOFF</code>, <code>wOF2</code>). On failure: a clean error
+ message via <code>plutobook_set_error_message</code>, <code>nullptr</code> returned (falls back to
+ system fonts), no bytes ever reach FreeType/brotli. The check is enforced at the single point
+ where font bytes are about to be parsed, so it applies regardless of the source (default curl/file
+ fetcher or a custom <code>ResourceFetcher</code>) -- independent of <code>supportsFormat</code>,
+ which only filters on the CSS <code>format()</code> hint and can lie.</p>
 
 <h2>Configuration (default + configurable)</h2>
-<p>Configurable max font size (reasonable default). Configurable accepted formats.</p>
+<p><code>DefaultResourceFetcher::setMaxFontBytes(size_t)</code> knob (member
+ <code>m_maxFontBytes</code>, default 8&nbsp;MiB) + <code>maxFontBytes()</code> accessor. Fixed
+ magic-byte allowlist (not configurable, pure security fix).</p>
 
 <footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
 Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
