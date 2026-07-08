@@ -28,6 +28,13 @@
 #define STBI_NO_PNG
 #endif
 
+// Defense-in-depth: stb's own default per-axis cap (`1 << 24`, ~16.7M) is far larger than any
+// legitimate image and does nothing to stop a decompression bomb on its own (width * height is
+// checked separately against `maxImagePixels()`, below, before any full decode). Lower it to a value
+// still safely above realistic single-axis image sizes (e.g. a wide banner or a tall scan) so it
+// only rejects clearly-pathological headers, without relying on it as the primary guard.
+#define STBI_MAX_DIMENSIONS 65535
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -89,10 +96,50 @@ static cairo_status_t png_read_function(void* closure, uint8_t* data, uint32_t l
 
 #endif // CAIRO_HAS_PNG_FUNCTIONS
 
+// Decompression-bomb guard shared by all decode paths (libpng-via-cairo, turbojpeg, webp, stb): a
+// malicious or malformed image can advertise a tiny transfer size but enormous pixel dimensions once
+// decoded (e.g. a few-KB PNG that unpacks to gigabytes of RGBA data). Each caller obtains
+// width/height cheaply from the format header alone -- before allocating the pixel buffer/surface for
+// the full decode -- and passes them here to be checked against the configured budget.
+static bool checkImagePixelBudget(uint64_t width, uint64_t height)
+{
+    auto maxImagePixels = defaultResourceFetcher()->maxImagePixels();
+    if(maxImagePixels > 0 && width * height > maxImagePixels) {
+        plutobook_set_error_message("image decode error: image dimensions %llux%llu exceed the %llu pixel maximum",
+            (unsigned long long)(width), (unsigned long long)(height), (unsigned long long)(maxImagePixels));
+        return false;
+    }
+
+    return true;
+}
+
+#ifdef CAIRO_HAS_PNG_FUNCTIONS
+
+// The PNG signature (8 bytes) is always immediately followed by the IHDR chunk: a 4-byte big-endian
+// length, the 4-byte ASCII type "IHDR", then chunk data beginning with a 4-byte width and a 4-byte
+// height (both big-endian) -- see the PNG spec, which mandates IHDR be the first chunk. Read these
+// directly so the pixel budget can be enforced without invoking the full decoder just to learn the
+// image's dimensions.
+static bool getPngDimensions(const char* data, size_t size, uint32_t& width, uint32_t& height)
+{
+    if(size < 24 || std::memcmp(data + 12, "IHDR", 4) != 0)
+        return false;
+    auto bytes = (const unsigned char*)(data);
+    width = (uint32_t(bytes[16]) << 24) | (uint32_t(bytes[17]) << 16) | (uint32_t(bytes[18]) << 8) | uint32_t(bytes[19]);
+    height = (uint32_t(bytes[20]) << 24) | (uint32_t(bytes[21]) << 16) | (uint32_t(bytes[22]) << 8) | uint32_t(bytes[23]);
+    return true;
+}
+
+#endif // CAIRO_HAS_PNG_FUNCTIONS
+
 static cairo_surface_t* decodeBitmapImage(const char* data, size_t size)
 {
 #ifdef CAIRO_HAS_PNG_FUNCTIONS
     if(size > 8 && std::memcmp(data, "\x89PNG\r\n\x1A\n", 8) == 0) {
+        uint32_t width, height;
+        if(getPngDimensions(data, size, width, height) && !checkImagePixelBudget(width, height))
+            return nullptr;
+
         png_read_stream_t stream = { data, size };
         return cairo_image_surface_create_from_png_stream(png_read_function, &stream);
     }
@@ -103,6 +150,11 @@ static cairo_surface_t* decodeBitmapImage(const char* data, size_t size)
         auto tj = tjInitDecompress();
         if(!tj || tjDecompressHeader(tj, (uint8_t*)(data), size, &width, &height) == -1) {
             plutobook_set_error_message("image decode error: %s", tjGetErrorStr());
+            tjDestroy(tj);
+            return nullptr;
+        }
+
+        if(!checkImagePixelBudget(width, height)) {
             tjDestroy(tj);
             return nullptr;
         }
@@ -136,6 +188,9 @@ static cairo_surface_t* decodeBitmapImage(const char* data, size_t size)
             return nullptr;
         }
 
+        if(!checkImagePixelBudget(config.input.width, config.input.height))
+            return nullptr;
+
         auto surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, config.input.width, config.input.height);
         auto surfaceData = cairo_image_surface_get_data(surface);
         auto surfaceWidth = cairo_image_surface_get_width(surface);
@@ -160,6 +215,14 @@ static cairo_surface_t* decodeBitmapImage(const char* data, size_t size)
 #endif // PLUTOBOOK_HAS_WEBP
 
     int width, height, channels;
+    if(!stbi_info_from_memory((const stbi_uc*)(data), size, &width, &height, &channels)) {
+        plutobook_set_error_message("image decode error: %s", stbi_failure_reason());
+        return nullptr;
+    }
+
+    if(!checkImagePixelBudget(width, height))
+        return nullptr;
+
     auto imageData = stbi_load_from_memory((const stbi_uc*)(data), size, &width, &height, &channels, STBI_rgb_alpha);
     if(imageData == nullptr) {
         plutobook_set_error_message("image decode error: %s", stbi_failure_reason());

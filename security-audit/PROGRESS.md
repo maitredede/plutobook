@@ -13,9 +13,9 @@ finding. One commit per finding (see `FIX-GUIDE.md`).
 |:----:|----|----------|----------|--------|
 | [x] | V01 | SSRF / multi-scheme fetch | Critical | acb32e3 |
 | [x] | V02 | `file://` file read + traversal | Critical | 080c0ea |
-| [x] | V03 | Font bytes → FreeType | High | (see current commit) |
-| [x] | V04 | Download size | High | (see current commit) |
-| [ ] | V05 | Image decompression bomb | High | — |
+| [x] | V03 | Font bytes → FreeType | High | 5009198 |
+| [x] | V04 | Download size | High | 98950eb |
+| [x] | V05 | Image decompression bomb | High | see `git log` (current commit) |
 | [ ] | V06 | colspan / col span | High | — |
 | [ ] | V07 | SVG `<use>` expansion | High | — |
 | [ ] | V08 | Unbounded recursion | High | — |

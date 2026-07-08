@@ -286,14 +286,19 @@ add(
  title="Image decompression bomb (no pixel budget)",
  keyfile="source/resource/imageresource.cpp:100-193",
  locations=[
-   ("source/resource/imageresource.cpp:162-169", "stb: STBI_MAX_DIMENSIONS=1<<24, no total pixel cap"),
+   ("source/resource/imageresource.cpp:92-99", "PNG via libpng/cairo: cairo_image_surface_create_from_png_stream directly, no cap (the path actually taken whenever cairo is built with PNG support -- the case in this repo -- since STBI_NO_PNG is then defined)"),
+   ("source/resource/imageresource.cpp:162-169", "stb (PNG if CAIRO_HAS_PNG_FUNCTIONS is absent, otherwise GIF/BMP/TGA/...): STBI_MAX_DIMENSIONS=1<<24, no total pixel cap"),
    ("source/resource/imageresource.cpp:100-124", "turbojpeg: width/height unbounded going into cairo"),
    ("source/resource/imageresource.cpp:139", "webp: config.input.width/height passed straight to cairo"),
  ],
  nature="""<p>There is no overall pixel budget. stb only bounds each axis (<code>1&lt;&lt;24</code>) and the
  allocation overflow (~2 GB); a PNG of a few KB at ~23000&times;23000 decompresses to ~2 GB of RGBA.
  turbojpeg accepts up to 65535&sup2; (~17 GB), webp up to 16383&sup2; (~1 GB), passed straight to
- <code>cairo_image_surface_create</code>.</p>""",
+ <code>cairo_image_surface_create</code>. In this repo, <code>cairo</code> is built with native PNG
+ support (<code>CAIRO_HAS_PNG_FUNCTIONS</code>), so <code>STBI_NO_PNG</code> is active and a PNG never
+ goes through stb: it is decoded directly by
+ <code>cairo_image_surface_create_from_png_stream</code> (libpng), a fourth, unbounded path that the
+ <code>make-bomb.py</code> PoC actually exercises.</p>""",
  risk="<p><strong>Impact</strong>: memory exhaustion from a tiny image (DoS).</p>",
  repro=[
    "Generate the bomb: <code>python3 poc/make-bomb.py</code> (creates bomb.png, ~23000x23000, a few KB).",
@@ -320,9 +325,31 @@ open("bomb.png","wb").write(png)
 print("bomb.png written:", len(png), "bytes for", W, "x", H)
 """,
  },
- fix="""<p>Pixel cap applied before <code>cairo_image_surface_create</code> on all paths
- (stb/turbojpeg/webp); lower <code>STBI_MAX_DIMENSIONS</code>.</p>""",
- config="<code>setMaxImagePixels</code> (default ~64 MP), configurable.",
+ fix="""<p>A pixel budget (<code>width &times; height</code>) is now applied <strong>before</strong> any
+ full-decode allocation, on all <strong>four</strong> paths of <code>decodeBitmapImage</code>:</p>
+ <ul>
+   <li>PNG via cairo/libpng: the IHDR (width/height, always the first 8 bytes after the PNG
+       signature) is read directly -- without invoking the full decoder -- before calling
+       <code>cairo_image_surface_create_from_png_stream</code>.</li>
+   <li>turbojpeg: checked right after <code>tjDecompressHeader</code>, before
+       <code>cairo_image_surface_create</code>.</li>
+   <li>webp: checked right after <code>WebPGetFeatures</code>, before
+       <code>cairo_image_surface_create</code>.</li>
+   <li>stb (GIF/BMP/TGA/&hellip;, and PNG if <code>cairo</code> is built without PNG support):
+       <code>stbi_info_from_memory</code> is called before <code>stbi_load_from_memory</code> to get
+       the dimensions without decoding the pixels.</li>
+ </ul>
+ <p>All four call a shared <code>checkImagePixelBudget(width, height)</code> function that reads
+ <code>DefaultResourceFetcher::maxImagePixels()</code> -- a global accessor, same pattern as
+ <code>maxFontBytes()</code> (V03), since the image decoder has no direct reference to the fetcher --
+ and fails cleanly (<code>plutobook_set_error_message</code> + <code>nullptr</code> return) without
+ ever allocating the full-size buffer/surface. As defense in depth,
+ <code>STBI_MAX_DIMENSIONS</code> is also lowered from <code>1&lt;&lt;24</code> (~16.7 M) to
+ <code>65535</code> via <code>#define</code> before including <code>stb_image.h</code>.</p>""",
+ config="""<code>DefaultResourceFetcher::setMaxImagePixels(uint64_t)</code> knob (member
+ <code>m_maxImagePixels</code>, default 64&nbsp;MP = <code>64ULL*1000*1000</code>; <code>0</code> =
+ unlimited) + <code>maxImagePixels()</code> accessor.""",
+ status="done",
 )
 
 add(
