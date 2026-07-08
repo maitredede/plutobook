@@ -13,9 +13,9 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 |:----:|----|----------|----------|--------|
 | [x] | V01 | SSRF / fetch multi-schéma | Critique | acb32e3 |
 | [x] | V02 | Lecture fichiers `file://` + traversal | Critique | 080c0ea |
-| [x] | V03 | Octets de police → FreeType | Haute | (voir commit courant) |
-| [x] | V04 | Taille de téléchargement | Haute | (voir commit courant) |
-| [ ] | V05 | Bombe de décompression d'image | Haute | — |
+| [x] | V03 | Octets de police → FreeType | Haute | 5009198 |
+| [x] | V04 | Taille de téléchargement | Haute | 98950eb |
+| [x] | V05 | Bombe de décompression d'image | Haute | voir `git log` (commit courant) |
 | [ ] | V06 | colspan / col span | Haute | — |
 | [ ] | V07 | Expansion SVG `<use>` | Haute | — |
 | [ ] | V08 | Récursion non bornée | Haute | — |

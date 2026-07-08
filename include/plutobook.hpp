@@ -701,6 +701,29 @@ public:
     void setMaxDownloadSize(size_t bytes) { m_maxDownloadSize = bytes; }
 
     /**
+     * @brief Sets the maximum number of pixels (width * height) accepted for a decoded bitmap image.
+     *
+     * A malicious or malformed image can advertise dimensions that are tiny to transfer/store but
+     * enormous once decoded (e.g. a few-KB PNG that unpacks to tens of thousands of pixels per side,
+     * i.e. gigabytes of RGBA data) -- a classic decompression-bomb DoS. This cap is checked against
+     * the image's dimensions as soon as they are known (from the format header), before the pixel
+     * buffer/surface for the full decode is allocated, independent of which `ResourceFetcher`
+     * supplied the bytes.
+     *
+     * If not set, the default is 64 megapixels (`64ULL * 1000 * 1000`). Passing `0` disables the
+     * limit, allowing images of unbounded dimensions to be decoded.
+     *
+     * @param pixels The maximum accepted pixel count (width * height), or `0` for no limit.
+     */
+    void setMaxImagePixels(uint64_t pixels) { m_maxImagePixels = pixels; }
+
+    /**
+     * @brief Returns the maximum number of pixels accepted for a decoded bitmap image.
+     * @return The configured pixel-count cap. See `setMaxImagePixels()`.
+     */
+    uint64_t maxImagePixels() const { return m_maxImagePixels; }
+
+    /**
      * @brief Fetches the resource at the specified URL.
      *
      * Equivalent to `fetchUrl(url, false)`: treats the request as an untrusted sub-resource fetch,
@@ -749,6 +772,7 @@ private:
     bool m_allowLocalNetwork = false;
     size_t m_maxFontBytes = 8 * 1024 * 1024;
     size_t m_maxDownloadSize = 32 * 1024 * 1024;
+    uint64_t m_maxImagePixels = 64ULL * 1000 * 1000;
 
     friend DefaultResourceFetcher* defaultResourceFetcher();
 };
