@@ -202,10 +202,20 @@ open("evil.ttf","wb").write(b"\\x00\\x01\\x00\\x00" + b"\\x00"*8 + b"\\xff"*64)
 print("evil.ttf ecrit (a fuzzer sous ASan)")
 """,
  },
- fix="""<p>Pre-valider taille et magic-bytes avant <code>FT_New_Memory_Face</code> ; imposer une allowlist
- de formats ; documenter/epingler la version FreeType+brotli. Appliquer le plafond de taille (V04) aux
- polices.</p>""",
- config="""Taille max de police configurable (defaut raisonnable). Formats acceptes configurables.""",
+ fix="""<p><code>FTFontData::create</code> (<code>source/resource/fontresource.cpp</code>) verifie desormais,
+ avant tout appel a <code>FT_New_Memory_Face</code> : (1) la taille des octets recus &le;
+ <code>DefaultResourceFetcher::maxFontBytes()</code> ; (2) que les 4 premiers octets correspondent a une
+ signature de police connue (sfnt <code>0x00010000</code>, <code>OTTO</code>, <code>true</code>,
+ <code>typ1</code>, collection <code>ttcf</code>, <code>wOFF</code>, <code>wOF2</code>). En cas d'echec :
+ message d'erreur propre via <code>plutobook_set_error_message</code>, retour <code>nullptr</code>
+ (fallback sur les polices systeme), aucun octet n'atteint FreeType/brotli. Verification faite au point
+ unique ou les octets de police sont sur le point d'etre parses, donc appliquee quelle que soit la source
+ (fetcher par defaut curl/fichier ou <code>ResourceFetcher</code> personnalise) -- independamment de
+ <code>supportsFormat</code>, qui ne filtre que l'indice CSS <code>format()</code> et peut mentir.</p>""",
+ config="""Knob <code>DefaultResourceFetcher::setMaxFontBytes(size_t)</code> (membre
+ <code>m_maxFontBytes</code>, defaut 8&nbsp;MiB) + accesseur <code>maxFontBytes()</code>. Allowlist de
+ magic-bytes fixe (non configurable, correctif pur de securite).""",
+ status="done",
 )
 
 add(

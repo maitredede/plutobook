@@ -652,6 +652,27 @@ public:
     void setAllowLocalNetwork(bool allow) { m_allowLocalNetwork = allow; }
 
     /**
+     * @brief Sets the maximum size, in bytes, accepted for font resources.
+     *
+     * Font bytes fetched from `@font-face { src: url(...) }` (any scheme) are handed to FreeType for
+     * parsing; oversized input needlessly widens that attack surface and wastes memory/time. This
+     * cap is checked when the font bytes are about to be parsed, independent of which
+     * `ResourceFetcher` (this default one or a custom one) supplied them, so it applies regardless of
+     * source -- network, `data:` URL, local file, or custom handler.
+     *
+     * If not set, the default is 8 MiB (`8 * 1024 * 1024`).
+     *
+     * @param bytes The maximum accepted font size, in bytes.
+     */
+    void setMaxFontBytes(size_t bytes) { m_maxFontBytes = bytes; }
+
+    /**
+     * @brief Returns the maximum size, in bytes, accepted for font resources.
+     * @return The configured font size cap, in bytes. See `setMaxFontBytes()`.
+     */
+    size_t maxFontBytes() const { return m_maxFontBytes; }
+
+    /**
      * @brief Fetches the resource at the specified URL.
      *
      * Equivalent to `fetchUrl(url, false)`: treats the request as an untrusted sub-resource fetch,
@@ -697,6 +718,7 @@ private:
 
     std::string m_allowedProtocols = "http,https,data";
     bool m_allowLocalNetwork = false;
+    size_t m_maxFontBytes = 8 * 1024 * 1024;
 
     friend DefaultResourceFetcher* defaultResourceFetcher();
 };
