@@ -382,7 +382,9 @@ PageSize Book::pageSizeAt(uint32_t pageIndex) const
 bool Book::loadUrl(std::string_view url, std::string_view userStyle, std::string_view userScript)
 {
     auto completeUrl = ResourceLoader::completeUrl(url);
-    auto resource = ResourceLoader::loadUrl(completeUrl, m_customResourceFetcher);
+    // This is the top-level document URL explicitly requested by the caller (trusted), unlike the
+    // sub-resource fetches made later while parsing its content (see Document::fetchResource).
+    auto resource = ResourceLoader::loadUrl(completeUrl, m_customResourceFetcher, /*trusted=*/true);
     if(resource.isNull())
         return false;
     if(loadData(resource.content(), resource.contentLength(), resource.mimeType(), resource.textEncoding(), userStyle, userScript, completeUrl.base())) {

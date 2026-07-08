@@ -35,7 +35,12 @@ class ResourceFetcher;
 
 class ResourceLoader {
 public:
-    static ResourceData loadUrl(const Url& url, ResourceFetcher* customFetcher = nullptr);
+    // `trusted` is true only for the top-level document URL passed to Book::loadUrl (the URL the
+    // embedder explicitly asked to load). It is false (the default) for every sub-resource fetch
+    // (images, stylesheets, fonts, SVG references, ...) triggered while parsing document content,
+    // which may originate from untrusted input. See ResourceFetcher::fetchUrl(const std::string&, bool)
+    // and DefaultResourceFetcher for how the flag is used.
+    static ResourceData loadUrl(const Url& url, ResourceFetcher* customFetcher = nullptr, bool trusted = false);
     static Url completeUrl(std::string_view value);
     static Url baseUrl();
 };

@@ -143,10 +143,26 @@ add(
 </body></html>
 """,
  },
- fix="""<p>Disable <code>file://</code> by default (explicit opt-in) and route it through the URL
- validator. When file access is allowed, offer optional confinement to a root directory.</p>""",
- config="""Default: <code>file://</code> disabled. Re-enable via <code>setAllowedProtocols</code>
- including <code>file</code>. Optional confinement to a root directory via the URL validator.""",
+ fix="""<p>Introduces a top-level / sub-resource trust model:
+ <code>ResourceLoader::loadUrl</code> now takes a <code>trusted</code> flag (default
+ <code>false</code>), propagated to <code>DefaultResourceFetcher::fetchUrl(url, trusted)</code>
+ (new non-pure virtual overload on <code>ResourceFetcher</code>; the old single-argument signature
+ is unchanged and means <code>trusted=false</code>). <code>Book::loadUrl</code> (so
+ <code>html2pdf</code>/<code>html2png</code> on a local file) passes <code>trusted=true</code>: the
+ scheme allowlist and the internal-IP filter do not apply to the top-level document, which keeps
+ the scheme explicitly requested by the caller. All sub-resources
+ (<code>Document::fetchResource</code>: images, stylesheets, fonts, SVG references) go through the
+ <code>trusted=false</code> default and remain filtered by the allowlist (so <code>file://</code>
+ and <code>../</code> traversal to an absolute <code>file://</code> path are rejected). The URL
+ validator (V01) applies in both cases, on the resolved URL. Redirects are still always capped to
+ <code>http,https</code> regardless of the trust level or the configured allowlist. Same treatment
+ applied to the non-curl branch.</p>""",
+ config="""Default: <code>file://</code> disabled for sub-resources only (the top-level document
+ explicitly loaded by the caller, e.g. <code>html2pdf file.html</code>, is not subject to the
+ allowlist). Re-enable <code>file://</code> for sub-resources via
+ <code>setAllowedProtocols(&hellip;, "file")</code>. Optional confinement to a root directory via
+ the URL validator.""",
+ status="done",
 )
 
 add(

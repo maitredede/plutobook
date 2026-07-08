@@ -122,12 +122,27 @@ C, and documented.
   `poc/listener.py` → no internal connection, `169.254.169.254`/`gopher` rejected.
 
 ### V02 — `file://` file read + traversal — **Critical**
-- Remove `file` from the default allowlist → `file://` rejected unless `setAllowedProtocols`
-  includes `file`.
-- The URL validator must see the **resolved** (absolute) URL so it can confine access to a root.
-- Also concerns the non-curl branch (`resource.cpp:331-367`): subject it to the same filter.
-- Verification: `poc/repro.html` → `file:///etc/passwd` and traversal `../../etc/hostname` rejected
-  by default.
+
+**Trust model to introduce** (key to V02, and fixes a V01 regression): distinguish the
+**top-level document** — the URL explicitly supplied by the caller (`Book::loadUrl`, e.g.
+`html2pdf ./doc.html`) = **trusted** — from **sub-resources** referenced by the document
+(`Document::fetchResource`, e.g. `<img>`, `@import`, `@font-face`) = **untrusted**.
+
+- The default scheme allowlist (`http,https,data`, no `file`) and the internal-IP filter should
+  only apply to **sub-resources**. The **top level** keeps the scheme the caller chose (so
+  `file://` still works for `html2pdf ./x.html`). Implementation: thread a "top-level / trusted"
+  flag through to `ResourceLoader::loadUrl` (or split the code paths between root document loading
+  and sub-resource fetching).
+- The **URL validator** (V01) is still invoked in **both** cases (so the caller can still enforce
+  its own policy even at the top level), but it sees the **resolved** (absolute) URL so it can
+  confine access to a root directory.
+- Also concerns the non-curl branch (`resource.cpp:331-367`): same treatment.
+- **V01 regression to fix here**: `html2pdf file.html` must work again (local input = trusted top
+  level) while still rejecting `file://` at the **sub-resource** level by default.
+- Verification: (a) `html2pdf security-audit/V02-local-file-read/poc/repro.html out.pdf`: the
+  document loads, but the `file:///etc/passwd` stylesheet and the traversal `<img>`
+  `../../etc/hostname` (sub-resources) are rejected by default; (b) `html2pdf <a plain local file>`
+  works; (c) `setAllowedProtocols(...,"file")` re-enables `file://` for sub-resources.
 
 ### V03 — Font bytes → FreeType — **High**
 - `source/resource/fontresource.cpp:57`: before `FT_New_Memory_Face`, check size ≤

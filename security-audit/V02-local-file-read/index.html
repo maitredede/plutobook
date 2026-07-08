@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V02 &middot; Local file read via file:// + path traversal</h1>
 <p><span class="badge sev-crit">Critical</span> &nbsp; <span class="muted">Local file disclosure</span></p>
 <div class="card">
-<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Status</b> <span class="status-done">fixed</span></div>
 <div class="kv"><b>Key file</b> <code>source/resource/url.cpp:568-575</code></div>
 </div>
 
@@ -42,12 +42,27 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <ul><li><code>poc/repro.html</code></li></ul>
 
 <h2>Proposed fix</h2>
-<p>Disable <code>file://</code> by default (explicit opt-in) and route it through the URL
- validator. When file access is allowed, offer optional confinement to a root directory.</p>
+<p>Introduces a top-level / sub-resource trust model:
+ <code>ResourceLoader::loadUrl</code> now takes a <code>trusted</code> flag (default
+ <code>false</code>), propagated to <code>DefaultResourceFetcher::fetchUrl(url, trusted)</code>
+ (new non-pure virtual overload on <code>ResourceFetcher</code>; the old single-argument signature
+ is unchanged and means <code>trusted=false</code>). <code>Book::loadUrl</code> (so
+ <code>html2pdf</code>/<code>html2png</code> on a local file) passes <code>trusted=true</code>: the
+ scheme allowlist and the internal-IP filter do not apply to the top-level document, which keeps
+ the scheme explicitly requested by the caller. All sub-resources
+ (<code>Document::fetchResource</code>: images, stylesheets, fonts, SVG references) go through the
+ <code>trusted=false</code> default and remain filtered by the allowlist (so <code>file://</code>
+ and <code>../</code> traversal to an absolute <code>file://</code> path are rejected). The URL
+ validator (V01) applies in both cases, on the resolved URL. Redirects are still always capped to
+ <code>http,https</code> regardless of the trust level or the configured allowlist. Same treatment
+ applied to the non-curl branch.</p>
 
 <h2>Configuration (default + configurable)</h2>
-<p>Default: <code>file://</code> disabled. Re-enable via <code>setAllowedProtocols</code>
- including <code>file</code>. Optional confinement to a root directory via the URL validator.</p>
+<p>Default: <code>file://</code> disabled for sub-resources only (the top-level document
+ explicitly loaded by the caller, e.g. <code>html2pdf file.html</code>, is not subject to the
+ allowlist). Re-enable <code>file://</code> for sub-resources via
+ <code>setAllowedProtocols(&hellip;, "file")</code>. Optional confinement to a root directory via
+ the URL validator.</p>
 
 <footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
 Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
