@@ -360,6 +360,11 @@ static int prereqCallback(void*, char* connPrimaryIp, char*, int, int)
 
 ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url)
 {
+    return fetchUrl(url, false);
+}
+
+ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url, bool trusted)
+{
     if(startswith(url, "data:", false))
         return loadDataUrl(percentDecode(url));
     std::string mimeType;
@@ -388,11 +393,22 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url)
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, m_maxRedirects);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, m_timeout);
 
-    auto allowedProtocols = curlAllowedProtocols(m_allowedProtocols);
-    curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, allowedProtocols.data());
-    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, allowedProtocols.data());
-    if(!m_allowLocalNetwork)
-        curl_easy_setopt(curl, CURLOPT_PREREQFUNCTION, prereqCallback);
+    // A redirect target is never the URL anyone explicitly asked for, whether the initiating
+    // request is the trusted top-level load or an untrusted sub-resource fetch, and whatever the
+    // configured allowlist is: always cap redirects to http/https.
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
+
+    // The scheme allowlist and internal-network filter only guard untrusted sub-resource fetches
+    // (images, stylesheets, fonts, ...). The trusted top-level document URL (Book::loadUrl) keeps
+    // whatever scheme/destination the caller explicitly chose; the URL validator (if any) still ran
+    // for it in ResourceLoader::loadUrl before we got here.
+    std::string allowedProtocols;
+    if(!trusted) {
+        allowedProtocols = curlAllowedProtocols(m_allowedProtocols);
+        curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, allowedProtocols.data());
+        if(!m_allowLocalNetwork)
+            curl_easy_setopt(curl, CURLOPT_PREREQFUNCTION, prereqCallback);
+    }
 
     auto response = curl_easy_perform(curl);
     if(response == CURLE_OK) {
@@ -420,12 +436,41 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url)
 DefaultResourceFetcher::DefaultResourceFetcher() = default;
 DefaultResourceFetcher::~DefaultResourceFetcher() = default;
 
+static bool isProtocolAllowed(std::string_view allowedProtocols, std::string_view scheme)
+{
+    while(!allowedProtocols.empty()) {
+        auto comma = allowedProtocols.find(',');
+        auto entry = allowedProtocols.substr(0, comma);
+        stripLeadingAndTrailingSpaces(entry);
+        if(equals(entry, scheme, false))
+            return true;
+        if(comma == std::string_view::npos)
+            break;
+        allowedProtocols.remove_prefix(comma + 1);
+    }
+
+    return false;
+}
+
 ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url)
+{
+    return fetchUrl(url, false);
+}
+
+ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url, bool trusted)
 {
     if(startswith(url, "data:", false))
         return loadDataUrl(percentDecode(url));
     std::string_view input(url);
     if(!startswith(input, "file://", false)) {
+        plutobook_set_error_message("Unable to fetch URL '%s': Unsupported protocol", url.data());
+        return ResourceData();
+    }
+
+    // Same trust distinction as the curl build: the allowlist only guards untrusted sub-resource
+    // fetches, not the trusted top-level document URL (Book::loadUrl). There is no network here to
+    // apply an internal-address filter to.
+    if(!trusted && !isProtocolAllowed(m_allowedProtocols, "file")) {
         plutobook_set_error_message("Unable to fetch URL '%s': Unsupported protocol", url.data());
         return ResourceData();
     }
@@ -460,7 +505,7 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url)
 
 #endif // PLUTOBOOK_HAS_CURL
 
-ResourceData ResourceLoader::loadUrl(const Url& url, ResourceFetcher* customFetcher)
+ResourceData ResourceLoader::loadUrl(const Url& url, ResourceFetcher* customFetcher, bool trusted)
 {
     const auto& validator = globalUrlValidator();
     if(validator && !validator(url.value())) {
@@ -472,7 +517,7 @@ ResourceData ResourceLoader::loadUrl(const Url& url, ResourceFetcher* customFetc
         return loadDataUrl(percentDecode(url.value()));
     if(customFetcher == nullptr)
         customFetcher = defaultResourceFetcher();
-    return customFetcher->fetchUrl(url.value());
+    return customFetcher->fetchUrl(url.value(), trusted);
 }
 
 Url ResourceLoader::baseUrl()

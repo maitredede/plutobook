@@ -519,6 +519,26 @@ public:
      * @return A `ResourceData` object containing the fetched resource, or a null `ResourceData` if an error occurs.
      */
     virtual ResourceData fetchUrl(const std::string& url) = 0;
+
+    /**
+     * @brief Fetches a resource from the specified URL, indicating whether it is trusted.
+     *
+     * `trusted` is `true` only for the top-level document URL passed to `Book::loadUrl` -- the URL
+     * the embedder explicitly asked to load. It is `false` for every sub-resource fetched while
+     * parsing that document's content (images, stylesheets, fonts, SVG references, ...), which may
+     * originate from untrusted input.
+     *
+     * The default implementation ignores `trusted` and forwards to `fetchUrl(url)`, so existing
+     * overrides of the single-argument overload keep working unchanged. Override this overload
+     * instead if your fetcher needs to apply a different policy for the trusted top-level load; for
+     * instance, `DefaultResourceFetcher` uses it to exempt that load from its protocol allowlist and
+     * internal-network filter, which still apply to every sub-resource fetch.
+     *
+     * @param url The URL of the resource to fetch.
+     * @param trusted `true` for the trusted top-level document load, `false` for sub-resource fetches.
+     * @return A `ResourceData` object containing the fetched resource, or a null `ResourceData` if an error occurs.
+     */
+    virtual ResourceData fetchUrl(const std::string& url, bool trusted) { return fetchUrl(url); }
 };
 
 /**
@@ -606,6 +626,11 @@ public:
      * If not set, the default is `"http,https,data"`, meaning schemes such as `file`, `ftp`, or
      * `gopher` are disabled unless explicitly re-enabled.
      *
+     * This allowlist, like `setAllowLocalNetwork()`, only applies to untrusted sub-resource fetches
+     * (images, stylesheets, fonts, ...). The trusted top-level document URL passed to
+     * `Book::loadUrl` is exempt, so e.g. `file://` continues to work for local top-level input even
+     * with the default allowlist. See `fetchUrl(const std::string&, bool)`.
+     *
      * @param protocols A comma-separated list of allowed URL schemes.
      */
     void setAllowedProtocols(std::string protocols) { m_allowedProtocols = std::move(protocols); }
@@ -618,6 +643,10 @@ public:
      * (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) range are rejected. This guards against
      * server-side request forgery targeting internal services from untrusted document content.
      *
+     * As with `setAllowedProtocols()`, this filter only applies to untrusted sub-resource fetches;
+     * it is never applied to the trusted top-level document load. See
+     * `fetchUrl(const std::string&, bool)`.
+     *
      * @param allow Set to true to allow requests to local/private network addresses.
      */
     void setAllowLocalNetwork(bool allow) { m_allowLocalNetwork = allow; }
@@ -625,10 +654,33 @@ public:
     /**
      * @brief Fetches the resource at the specified URL.
      *
+     * Equivalent to `fetchUrl(url, false)`: treats the request as an untrusted sub-resource fetch,
+     * subject to `setAllowedProtocols()` and `setAllowLocalNetwork()`.
+     *
      * @param url The resource URL to fetch.
      * @return The fetched resource data.
      */
     ResourceData fetchUrl(const std::string& url) final;
+
+    /**
+     * @brief Fetches the resource at the specified URL, with a trust designation.
+     *
+     * When `trusted` is `false` (a sub-resource fetch), the request is subject to the protocol
+     * allowlist (`setAllowedProtocols()`) and, unless `setAllowLocalNetwork()` is enabled, requests
+     * resolving to a loopback/link-local/private address are rejected.
+     *
+     * When `trusted` is `true` (the top-level document URL passed to `Book::loadUrl`), neither
+     * restriction applies: the caller explicitly chose that URL, including its scheme.
+     *
+     * In both cases, redirects are always restricted to `http`/`https` regardless of `trusted` or
+     * the configured allowlist, since a redirect target -- unlike the original URL -- was never
+     * explicitly requested by anyone.
+     *
+     * @param url The resource URL to fetch.
+     * @param trusted `true` for the trusted top-level document load, `false` for sub-resource fetches.
+     * @return The fetched resource data.
+     */
+    ResourceData fetchUrl(const std::string& url, bool trusted) final;
 
 private:
     DefaultResourceFetcher();

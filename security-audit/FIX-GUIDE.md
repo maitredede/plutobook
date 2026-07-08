@@ -120,10 +120,28 @@ Toujours : **défaut qui ne casse pas le rendu légitime**, exposé C++ et (si p
   → aucune connexion interne, `169.254.169.254`/`gopher` refusés.
 
 ### V02 — Lecture de fichiers `file://` + traversal — **Critique**
-- Retirer `file` de l'allowlist par défaut → `file://` refusé sauf `setAllowedProtocols` incluant `file`.
-- Le validateur d'URL doit voir l'URL **résolue** (absolue) pour permettre un confinement à une racine.
-- Concerne aussi la branche non-curl (`resource.cpp:331-367`) : soumettre au même filtre.
-- Vérif : `poc/repro.html` → `file:///etc/passwd` et traversal `../../etc/hostname` refusés par défaut.
+
+**Modèle de confiance à introduire** (clé de V02 et correction d'une régression de V01) :
+distinguer le **document de premier niveau** — l'URL explicitement fournie par l'appelant
+(`Book::loadUrl`, ex. `html2pdf ./doc.html`) = **de confiance** — des **sous-ressources**
+référencées par le document (`Document::fetchResource`, ex. `<img>`, `@import`, `@font-face`) =
+**non fiables**.
+
+- L'allowlist de schémas par défaut (`http,https,data`, sans `file`) et le filtrage IP interne ne
+  doivent s'appliquer qu'aux **sous-ressources**. Le **premier niveau** garde le schéma choisi par
+  l'appelant (donc `file://` fonctionne pour `html2pdf ./x.html`). Implémentation : propager un
+  drapeau « top-level / trusted » jusqu'à `ResourceLoader::loadUrl` (ou séparer les chemins de code
+  entre chargement du document racine et fetch de sous-ressource).
+- Le **validateur d'URL** (V01) reste appelé dans **les deux** cas (l'appelant peut donc imposer sa
+  propre politique même au premier niveau), mais il voit l'URL **résolue** (absolue) pour permettre
+  un confinement à une racine.
+- Concerne aussi la branche non-curl (`resource.cpp:331-367`) : même traitement.
+- **Régression V01 à corriger ici** : `html2pdf fichier.html` doit à nouveau fonctionner (entrée
+  locale = premier niveau de confiance) tout en refusant `file://` en **sous-ressource** par défaut.
+- Vérif : (a) `html2pdf security-audit/V02-local-file-read/poc/repro.html out.pdf` : le document se
+  charge, mais la feuille de style `file:///etc/passwd` et l'`<img>` en traversal `../../etc/hostname`
+  (sous-ressources) sont refusés par défaut ; (b) `html2pdf <un fichier local simple>` fonctionne ;
+  (c) `setAllowedProtocols(...,"file")` réautorise `file://` en sous-ressource.
 
 ### V03 — Octets de police → FreeType — **Haute**
 - `source/resource/fontresource.cpp:57` : avant `FT_New_Memory_Face`, vérifier taille ≤

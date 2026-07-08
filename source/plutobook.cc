@@ -506,6 +506,7 @@ void plutobook_set_url_validator(plutobook_url_validator_callback_t callback, vo
 struct _plutobook final : public plutobook::Book, public plutobook::ResourceFetcher {
     _plutobook(plutobook_page_size_t size, plutobook_page_margins_t margins, plutobook_media_type_t media);
     plutobook::ResourceData fetchUrl(const std::string& url) final;
+    plutobook::ResourceData fetchUrl(const std::string& url, bool trusted) final;
     plutobook_resource_fetch_callback_t custom_resource_fetcher_callback{nullptr};
     void* custom_resource_fetcher_closure{nullptr};
 };
@@ -517,8 +518,13 @@ _plutobook::_plutobook(plutobook_page_size_t size, plutobook_page_margins_t marg
 
 plutobook::ResourceData _plutobook::fetchUrl(const std::string& url)
 {
+    return fetchUrl(url, false);
+}
+
+plutobook::ResourceData _plutobook::fetchUrl(const std::string& url, bool trusted)
+{
     if(custom_resource_fetcher_callback == nullptr)
-        return plutobook::defaultResourceFetcher()->fetchUrl(url);
+        return plutobook::defaultResourceFetcher()->fetchUrl(url, trusted);
     return plutobook::ResourceData(custom_resource_fetcher_callback(custom_resource_fetcher_closure, url.data()));
 }
 

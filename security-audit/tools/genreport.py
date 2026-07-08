@@ -143,10 +143,26 @@ add(
 </body></html>
 """,
  },
- fix="""<p>Desactiver <code>file://</code> par defaut (opt-in explicite) et le soumettre au validateur
- d'URL. En mode fichier autorise, offrir un confinement optionnel a un repertoire racine.</p>""",
- config="""Defaut : <code>file://</code> desactive. Reactivation via <code>setAllowedProtocols</code>
- incluant <code>file</code>. Confinement optionnel a une racine via le validateur d'URL.""",
+ fix="""<p>Introduction d'un modele de confiance premier niveau / sous-ressource :
+ <code>ResourceLoader::loadUrl</code> prend desormais un drapeau <code>trusted</code> (defaut
+ <code>false</code>), propage jusqu'a <code>DefaultResourceFetcher::fetchUrl(url, trusted)</code>
+ (nouvelle surcharge virtuelle non pure sur <code>ResourceFetcher</code>, l'ancienne signature a un
+ seul argument reste inchangee et vaut <code>trusted=false</code>). <code>Book::loadUrl</code> (donc
+ <code>html2pdf</code>/<code>html2png</code> sur un fichier local) passe <code>trusted=true</code> :
+ l'allowlist de schemas et le filtre IP interne ne s'appliquent pas au document de premier niveau,
+ qui garde le schema explicitement demande par l'appelant. Toutes les sous-ressources
+ (<code>Document::fetchResource</code> : images, feuilles de style, polices, references SVG) passent
+ par le defaut <code>trusted=false</code> et restent filtrees par l'allowlist (donc <code>file://</code>
+ et le traversal <code>../</code> vers un chemin absolu <code>file://</code> sont refuses). Le
+ validateur d'URL (V01) s'applique dans les deux cas, sur l'URL resolue. Les redirections restent
+ toujours limitees a <code>http,https</code> quel que soit le niveau de confiance ou l'allowlist
+ configuree. Meme traitement applique a la branche non-curl.</p>""",
+ config="""Defaut : <code>file://</code> desactive pour les sous-ressources uniquement (le document de
+ premier niveau explicitement charge par l'appelant, ex. <code>html2pdf fichier.html</code>, n'est pas
+ soumis a l'allowlist). Reactivation du <code>file://</code> en sous-ressource via
+ <code>setAllowedProtocols(&hellip;, "file")</code>. Confinement optionnel a une racine via le
+ validateur d'URL.""",
+ status="done",
 )
 
 add(
