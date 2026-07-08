@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V04 &middot; Aucune limite de taille de telechargement</h1>
 <p><span class="badge sev-high">Haute</span> &nbsp; <span class="muted">Deni de service (memoire)</span></p>
 <div class="card">
-<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Statut</b> <span class="status-done">corrige</span></div>
 <div class="kv"><b>Fichier cle</b> <code>source/resource/resource.cpp:268-273</code></div>
 </div>
 
@@ -42,11 +42,26 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <ul><li><code>poc/repro.html</code></li><li><code>poc/huge-server.py</code></li></ul>
 
 <h2>Correctif propose</h2>
-<p><code>CURLOPT_MAXFILESIZE_LARGE</code> + cap dur dans <code>writeCallback</code> (abandon au
- depassement) + <code>CURLOPT_CONNECTTIMEOUT</code>.</p>
+<p><code>DefaultResourceFetcher::fetchUrl</code> definit desormais <code>CURLOPT_MAXFILESIZE_LARGE</code>
+ (rejet immediat si une taille annoncee, ex. <code>Content-Length</code>, depasse le plafond) et
+ <code>CURLOPT_CONNECTTIMEOUT</code>. <code>CURLOPT_MAXFILESIZE_LARGE</code> ne verifie qu'une taille
+ <em>connue a l'avance</em> ; une reponse en <em>chunked encoding</em> n'en annonce aucune et peut donc le
+ contourner completement. Pour fermer cette faille, <code>CURLOPT_WRITEDATA</code> pointe maintenant vers
+ une petite struct <code>WriteCallbackContext</code> (<code>ByteArray*</code> + plafond) au lieu du seul
+ <code>ByteArray*</code> : <code>writeCallback</code> connait ainsi le plafond et, des que la taille
+ accumulee le depasserait, retourne un compte court (0) &mdash; ce que curl interprete comme une erreur
+ d'ecriture et interrompt le transfert immediatement (<code>CURLE_WRITE_ERROR</code>), quelle que soit la
+ forme du transfert (chunked ou non). Les deux codes d'echec (<code>CURLE_FILESIZE_EXCEEDED</code> et
+ <code>CURLE_WRITE_ERROR</code>) sont traduits en un message d'erreur clair et specifique (taille max
+ depassee) au lieu du <code>curl_easy_strerror</code> generique. La branche non-curl (lecture de fichier
+ local via <code>tellg</code>) n'applique pas ce plafond : la taille y est connue a l'avance et lue en une
+ seule allocation bornee, ce qui ne correspond pas au modele de menace (flux distant sans fin) ; l'ajouter
+ risquerait de tronquer silencieusement un gros fichier local legitime pour aucun benefice equivalent.</p>
 
 <h2>Configuration (defaut + configurable)</h2>
-<p><code>setMaxDownloadSize</code> (defaut ~32 MiB), configurable. <code>setConnectTimeout</code>.</p>
+<p>Knobs <code>DefaultResourceFetcher::setMaxDownloadSize(size_t)</code> (membre
+ <code>m_maxDownloadSize</code>, defaut 32&nbsp;MiB ; <code>0</code> = illimite) et
+ <code>setConnectTimeout(int)</code> (membre <code>m_connectTimeout</code>, defaut 30&nbsp;s).</p>
 
 <footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
 Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>

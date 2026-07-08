@@ -259,9 +259,25 @@ class H(BaseHTTPRequestHandler):
 HTTPServer(("127.0.0.1",8082), H).serve_forever()
 """,
  },
- fix="""<p><code>CURLOPT_MAXFILESIZE_LARGE</code> + cap dur dans <code>writeCallback</code> (abandon au
- depassement) + <code>CURLOPT_CONNECTTIMEOUT</code>.</p>""",
- config="""<code>setMaxDownloadSize</code> (defaut ~32 MiB), configurable. <code>setConnectTimeout</code>.""",
+ fix="""<p><code>DefaultResourceFetcher::fetchUrl</code> definit desormais <code>CURLOPT_MAXFILESIZE_LARGE</code>
+ (rejet immediat si une taille annoncee, ex. <code>Content-Length</code>, depasse le plafond) et
+ <code>CURLOPT_CONNECTTIMEOUT</code>. <code>CURLOPT_MAXFILESIZE_LARGE</code> ne verifie qu'une taille
+ <em>connue a l'avance</em> ; une reponse en <em>chunked encoding</em> n'en annonce aucune et peut donc le
+ contourner completement. Pour fermer cette faille, <code>CURLOPT_WRITEDATA</code> pointe maintenant vers
+ une petite struct <code>WriteCallbackContext</code> (<code>ByteArray*</code> + plafond) au lieu du seul
+ <code>ByteArray*</code> : <code>writeCallback</code> connait ainsi le plafond et, des que la taille
+ accumulee le depasserait, retourne un compte court (0) &mdash; ce que curl interprete comme une erreur
+ d'ecriture et interrompt le transfert immediatement (<code>CURLE_WRITE_ERROR</code>), quelle que soit la
+ forme du transfert (chunked ou non). Les deux codes d'echec (<code>CURLE_FILESIZE_EXCEEDED</code> et
+ <code>CURLE_WRITE_ERROR</code>) sont traduits en un message d'erreur clair et specifique (taille max
+ depassee) au lieu du <code>curl_easy_strerror</code> generique. La branche non-curl (lecture de fichier
+ local via <code>tellg</code>) n'applique pas ce plafond : la taille y est connue a l'avance et lue en une
+ seule allocation bornee, ce qui ne correspond pas au modele de menace (flux distant sans fin) ; l'ajouter
+ risquerait de tronquer silencieusement un gros fichier local legitime pour aucun benefice equivalent.</p>""",
+ config="""Knobs <code>DefaultResourceFetcher::setMaxDownloadSize(size_t)</code> (membre
+ <code>m_maxDownloadSize</code>, defaut 32&nbsp;MiB ; <code>0</code> = illimite) et
+ <code>setConnectTimeout(int)</code> (membre <code>m_connectTimeout</code>, defaut 30&nbsp;s).""",
+ status="done",
 )
 
 add(

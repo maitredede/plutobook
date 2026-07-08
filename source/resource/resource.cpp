@@ -276,10 +276,23 @@ DefaultResourceFetcher::~DefaultResourceFetcher()
     curl_global_cleanup();
 }
 
-static size_t writeCallback(const char* contents, size_t blockSize, size_t numberOfBlocks, ByteArray* response)
+// CURLOPT_MAXFILESIZE_LARGE (set on the handle below) only rejects a transfer whose size is known in
+// advance, from a `Content-Length` header or equivalent -- it never inspects the bytes actually
+// flowing through this callback. A chunked or otherwise streamed response advertises no size up
+// front, so a server can stream past that limit indefinitely and MAXFILESIZE never fires. This
+// struct carries the same cap into the callback so it can be enforced as a hard stop on the
+// accumulated buffer regardless of transfer shape.
+struct WriteCallbackContext {
+    ByteArray* response;
+    size_t maxDownloadSize; // 0 means unlimited, see DefaultResourceFetcher::setMaxDownloadSize()
+};
+
+static size_t writeCallback(const char* contents, size_t blockSize, size_t numberOfBlocks, WriteCallbackContext* context)
 {
     size_t totalSize = blockSize * numberOfBlocks;
-    response->insert(response->end(), contents, contents + totalSize);
+    if(context->maxDownloadSize > 0 && context->response->size() + totalSize > context->maxDownloadSize)
+        return 0; // short count: curl aborts the transfer with CURLE_WRITE_ERROR
+    context->response->insert(context->response->end(), contents, contents + totalSize);
     return totalSize;
 }
 
@@ -371,10 +384,12 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url, bool trust
     std::string textEncoding;
     auto content = ByteArrayCreate();
 
+    WriteCallbackContext writeContext{content, m_maxDownloadSize};
+
     auto curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_URL, url.data());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, content);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &writeContext);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "PlutoBook/" PLUTOBOOK_VERSION_STRING);
 
     if(!m_caInfo.empty())
@@ -392,6 +407,15 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url, bool trust
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, m_followRedirects);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, m_maxRedirects);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, m_timeout);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, m_connectTimeout);
+
+    // Rejects the transfer up front when a size is advertised in advance (Content-Length or
+    // equivalent) and exceeds the cap. This is only a first line of defense: it has no effect on
+    // chunked/streamed responses that never advertise a size, which is what writeCallback's hard cap
+    // (via WriteCallbackContext above) is for. A limit of 0 means unlimited, matching curl's own
+    // default of "no limit" for this option.
+    if(m_maxDownloadSize > 0)
+        curl_easy_setopt(curl, CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)m_maxDownloadSize);
 
     // A redirect target is never the URL anyone explicitly asked for, whether the initiating
     // request is the trusted top-level load or an untrusted sub-resource fetch, and whatever the
@@ -426,7 +450,15 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url, bool trust
     curl_easy_cleanup(curl);
     if(response == CURLE_OK)
         return ResourceData(content->data(), content->size(), mimeType, textEncoding, ByteArrayDestroy, content);
-    plutobook_set_error_message("Unable to fetch URL '%s': %s", url.data(), curl_easy_strerror(response));
+    if(response == CURLE_FILESIZE_EXCEEDED || response == CURLE_WRITE_ERROR) {
+        // CURLE_FILESIZE_EXCEEDED comes from the CURLOPT_MAXFILESIZE_LARGE pre-check above;
+        // CURLE_WRITE_ERROR is what curl reports when writeCallback returns a short count, which it
+        // only ever does when the accumulated size would exceed m_maxDownloadSize. Either way, give a
+        // clear, specific message instead of curl's generic strerror for this code.
+        plutobook_set_error_message("Unable to fetch URL '%s': download size exceeds the %zu byte maximum", url.data(), m_maxDownloadSize);
+    } else {
+        plutobook_set_error_message("Unable to fetch URL '%s': %s", url.data(), curl_easy_strerror(response));
+    }
     ByteArrayDestroy(content);
     return ResourceData();
 }
@@ -495,6 +527,11 @@ ResourceData DefaultResourceFetcher::fetchUrl(const std::string& url, bool trust
     std::string textEncoding;
     mimeTypeFromPath(mimeType, filename);
 
+    // m_maxDownloadSize (V04) is deliberately not enforced here: it targets an attacker-controlled
+    // remote server streaming an unbounded body past the caller's expectations, which local
+    // filesystem access does not model -- the size is known up front (tellg) and reading it is a
+    // single bounded allocation, not an open-ended transfer. Capping it here would risk silently
+    // truncating a legitimate large local file with no equivalent benefit.
     auto content = ByteArrayCreate(in.tellg());
     in.seekg(0, std::ios::beg);
     in.read(content->data(), content->size());
