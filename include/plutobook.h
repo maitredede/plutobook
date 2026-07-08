@@ -712,6 +712,20 @@ typedef bool (*plutobook_url_validator_callback_t)(void* closure, const char* ur
 PLUTOBOOK_API void plutobook_set_url_validator(plutobook_url_validator_callback_t callback, void* closure);
 
 /**
+ * @brief Sets the maximum value accepted for a table's span attributes.
+ *
+ * Bounds the `colspan`/`rowspan` attributes of table cells and the `span` attribute of
+ * `<col>`/`<colgroup>` elements. The HTML specification caps all three at 1000; values above the
+ * configured maximum are clamped down to it (a span of 0 is still treated as 1).
+ *
+ * If not set, the default is 1000. Passing `0` disables the limit, allowing unbounded spans -- not
+ * recommended for untrusted input.
+ *
+ * @param max The maximum accepted span value, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_table_span(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {

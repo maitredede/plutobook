@@ -375,9 +375,25 @@ add(
 <body><table><tr><td colspan="200000000">x</td></tr></table></body></html>
 """,
  },
- fix="""<p>Clamp <code>colspan</code>/<code>rowspan</code>/<code>col span</code> to a maximum; replicate
- the clamp already present for <code>rowSpan</code> (<code>tablebox.cpp:1364</code>).</p>""",
- config="Configurable max colspan/span, <strong>default 1000</strong> (HTML spec value).",
+ fix="""<p><code>HTMLTableCellElement::colSpan()</code>/<code>rowSpan()</code> and
+ <code>HTMLTableColElement::span()</code> (<code>source/htmldocument.cpp</code>) now cap the raw
+ attribute value via a <code>clampTableSpanMax()</code> helper (and <code>clampTableSpan()</code>,
+ which also applies the existing minimum of 1) before it ever reaches <code>tablebox.cpp</code>: the
+ <code>emplace</code> loop (<code>:1389-1400</code>) and the <code>col</code>/<code>colgroup</code>
+ <code>span</code> loop (<code>:439-443</code>) are unchanged but never see an unbounded value again.
+ <code>rowSpan()</code> keeps the spec value <code>0</code> ("extend to the end of the row group") --
+ only the maximum is applied to it, not the minimum -- and is otherwise already bounded by the
+ actual row count in <code>TableSectionBox::build()</code> (<code>:1364-1376</code>, the model this
+ fix follows).</p>""",
+ config="""New reusable configuration facade <strong>EngineLimits</strong>
+ (<code>include/plutobook.hpp</code> + <code>include/plutobook.h</code>), reached through the global
+ singleton <code>plutobook::engineLimits()</code> (same style as
+ <code>plutobook::defaultResourceFetcher()</code>): <code>setMaxTableSpan(uint32_t)</code> /
+ <code>maxTableSpan()</code>, <strong>default 1000</strong> (HTML spec value), <code>0</code> =
+ unlimited. Matching C API: <code>plutobook_set_max_table_span(unsigned int)</code>. This will be the
+ anchor point for future engine limits (V07-V12: nesting depth, <code>&lt;use&gt;</code> expansion
+ budget, page count, counter length, <code>column-count</code>) -- see section C of the fix guide.""",
+ status="done",
 )
 
 add(

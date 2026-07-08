@@ -90,22 +90,38 @@ Goal: a callback invoked **before any download**, regardless of the fetcher in u
 
 ### C. Engine limits (parse / layout)
 
-There is not yet a document-level configuration object for these limits. Recommended approach:
-**constants with a safe default**, made configurable via the lightest mechanism consistent with the
-existing architecture (e.g. a setter on `Book`, or a global engine config). Existing model to
-follow: `kMaxImportDepth = 256` in `source/cssstylesheet.cpp:970`.
+**Done (V06)**: the `EngineLimits` facade now centralizes these engine (parse/layout) limits, as
+opposed to the fetcher knobs (section A, specific to network/resource decoding). This is the shared
+home for V06-V12: **reuse this class verbatim**, do not create a second mechanism.
 
-| Limit | Proposed default | Concerns |
-|--------|----------------|----------|
-| nesting depth (parse/layout/paint/destruction) | 512 | V08 |
-| `<use>` expansion budget (instantiated nodes) + depth | 100,000 nodes / depth 512 | V07 |
-| max `colspan` / `rowspan` / `col span` | 1000 (HTML spec value) | V06 |
-| max `column-count` | 1000 | V12 |
-| max page count | 100,000 | V09 |
-| max counter representation length | 100,000 | V10 |
+- C++ class `plutobook::EngineLimits` (`include/plutobook.hpp`, implementation in
+  `source/plutobook.cpp`): one setter/getter pair per limit (e.g. `setMaxTableSpan(uint32_t)` /
+  `maxTableSpan() const`), safe default as a member initializer, `0` = unlimited (document
+  per-limit if applicable). Private constructor + `friend` singleton accessor, following the exact
+  model of `DefaultResourceFetcher` (section A) — **not** a `kMaxImportDepth`-style local,
+  non-configurable constant for new limits (`kMaxImportDepth` remains an isolated pre-existing case,
+  not reconfigurable, not to be imitated for V07+).
+- Global accessor: `plutobook::EngineLimits* plutobook::engineLimits();` (function-local `static`
+  singleton, same pattern as `defaultResourceFetcher()`).
+- Matching C API (`include/plutobook.h`, implementation in `source/plutobook.cc`): one
+  `plutobook_set_<name>(...)` per setter, calling `plutobook::engineLimits()->set<Name>(...)` (see
+  `plutobook_set_max_table_span` for the model).
+- **To add a limit (V07-V12)**: add a private member + its public setter/getter in `EngineLimits`
+  (`plutobook.hpp`), the matching C function in `plutobook.h`/`plutobook.cc`; read the value via
+  `engineLimits()->maXxx()` at the enforcement point(s). No other plumbing is required (the
+  singleton and its accessor already exist).
 
-Always: **a default that does not break legitimate rendering**, exposed in C++ and (where relevant)
-C, and documented.
+| Limit | Proposed default | Concerns | Accessor |
+|--------|----------------|----------|-----------|
+| max `colspan` / `rowspan` / `col span` | 1000 (HTML spec value) | V06 | `maxTableSpan` — **done** |
+| nesting depth (parse/layout/paint/destruction) | 512 | V08 | `maxNestingDepth` (to add) |
+| `<use>` expansion budget (instantiated nodes) + depth | 100,000 nodes / depth 512 | V07 | `maxUseExpansion` (+ depth, to add) |
+| max `column-count` | 1000 | V12 | `maxColumnCount` (to add) |
+| max page count | 100,000 | V09 | `maxPageCount` (to add) |
+| max counter representation length | 100,000 | V10 | `maxCounterLength` (to add) |
+
+Always: **a default that does not break legitimate rendering**, exposed in C++ and C, and
+documented.
 
 ---
 

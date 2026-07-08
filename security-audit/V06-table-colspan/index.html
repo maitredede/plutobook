@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V06 &middot; Unbounded table colspan / col span</h1>
 <p><span class="badge sev-high">High</span> &nbsp; <span class="muted">Denial of service (memory)</span></p>
 <div class="card">
-<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Status</b> <span class="status-done">fixed</span></div>
 <div class="kv"><b>Key file</b> <code>source/layout/tablebox.cpp:1389</code></div>
 </div>
 
@@ -38,11 +38,26 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <ul><li><code>poc/repro.html</code></li></ul>
 
 <h2>Proposed fix</h2>
-<p>Clamp <code>colspan</code>/<code>rowspan</code>/<code>col span</code> to a maximum; replicate
- the clamp already present for <code>rowSpan</code> (<code>tablebox.cpp:1364</code>).</p>
+<p><code>HTMLTableCellElement::colSpan()</code>/<code>rowSpan()</code> and
+ <code>HTMLTableColElement::span()</code> (<code>source/htmldocument.cpp</code>) now cap the raw
+ attribute value via a <code>clampTableSpanMax()</code> helper (and <code>clampTableSpan()</code>,
+ which also applies the existing minimum of 1) before it ever reaches <code>tablebox.cpp</code>: the
+ <code>emplace</code> loop (<code>:1389-1400</code>) and the <code>col</code>/<code>colgroup</code>
+ <code>span</code> loop (<code>:439-443</code>) are unchanged but never see an unbounded value again.
+ <code>rowSpan()</code> keeps the spec value <code>0</code> ("extend to the end of the row group") --
+ only the maximum is applied to it, not the minimum -- and is otherwise already bounded by the
+ actual row count in <code>TableSectionBox::build()</code> (<code>:1364-1376</code>, the model this
+ fix follows).</p>
 
 <h2>Configuration (default + configurable)</h2>
-<p>Configurable max colspan/span, <strong>default 1000</strong> (HTML spec value).</p>
+<p>New reusable configuration facade <strong>EngineLimits</strong>
+ (<code>include/plutobook.hpp</code> + <code>include/plutobook.h</code>), reached through the global
+ singleton <code>plutobook::engineLimits()</code> (same style as
+ <code>plutobook::defaultResourceFetcher()</code>): <code>setMaxTableSpan(uint32_t)</code> /
+ <code>maxTableSpan()</code>, <strong>default 1000</strong> (HTML spec value), <code>0</code> =
+ unlimited. Matching C API: <code>plutobook_set_max_table_span(unsigned int)</code>. This will be the
+ anchor point for future engine limits (V07-V12: nesting depth, <code>&lt;use&gt;</code> expansion
+ budget, page count, counter length, <code>column-count</code>) -- see section C of the fix guide.</p>
 
 <footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
 Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
