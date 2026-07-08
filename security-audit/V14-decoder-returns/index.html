@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V14 - Retours turbojpeg/webp non verifies + malloc non teste</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; Tous les problemes</a></div>
+<h1>V14 &middot; Retours turbojpeg/webp non verifies + malloc non teste</h1>
+<p><span class="badge sev-low">Basse</span> &nbsp; <span class="muted">Robustesse</span></p>
+<div class="card">
+<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Fichier cle</b> <code>source/resource/imageresource.cpp:110-123</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>Le retour de <code>tjDecompress2</code> est ignore et le <code>std::malloc</code> du blob JPEG conserve n'est pas teste avant <code>memcpy</code>.</p>
+
+<h2>Localisation</h2>
+<ul><li><code>source/resource/imageresource.cpp:115</code> &mdash; tjDecompress2 retour ignore</li><li><code>source/resource/imageresource.cpp:118-119</code> &mdash; std::malloc non teste avant memcpy</li></ul>
+
+<h2>Risque &amp; impact</h2>
+<p><strong>Impact</strong> : crash/DoS sur echec d'allocation (amplifie par V04).</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Fournir un JPEG malforme/enorme et observer le chemin non verifie (sous ASan).</li></ol>
+<p class="muted">Fichiers d'exemple :</p>
+<ul><li><code>poc/note.md</code></li></ul>
+
+<h2>Correctif propose</h2>
+<p>Verifier tous les retours de decodeur et le <code>malloc</code> avant usage.</p>
+
+<h2>Configuration (defaut + configurable)</h2>
+<p>Correctif de robustesse.</p>
+
+<footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
+Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>
+</div></body></html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V05 - Bombe de decompression d&#x27;image (aucun budget pixel)</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; Tous les problemes</a></div>
+<h1>V05 &middot; Bombe de decompression d'image (aucun budget pixel)</h1>
+<p><span class="badge sev-high">Haute</span> &nbsp; <span class="muted">Deni de service (memoire)</span></p>
+<div class="card">
+<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Fichier cle</b> <code>source/resource/imageresource.cpp:100-193</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>Aucun budget de pixels global. stb ne borne que chaque axe (<code>1&lt;&lt;24</code>) et l'overflow
+ d'allocation (~2 Go) ; un PNG de quelques Ko en ~23000&times;23000 se decompresse en ~2 Go RGBA. turbojpeg
+ accepte jusqu'a 65535&sup2; (~17 Go), webp jusqu'a 16383&sup2; (~1 Go), passes directement a
+ <code>cairo_image_surface_create</code>.</p>
+
+<h2>Localisation</h2>
+<ul><li><code>source/resource/imageresource.cpp:162-169</code> &mdash; stb: STBI_MAX_DIMENSIONS=1&lt;&lt;24, pas de cap pixel total</li><li><code>source/resource/imageresource.cpp:100-124</code> &mdash; turbojpeg: width/height non bornes vers cairo</li><li><code>source/resource/imageresource.cpp:139</code> &mdash; webp: config.input.width/height direct vers cairo</li></ul>
+
+<h2>Risque &amp; impact</h2>
+<p><strong>Impact</strong> : epuisement memoire depuis une image minuscule (DoS).</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Generer la bombe : <code>python3 poc/make-bomb.py</code> (cree bomb.png ~23000x23000, quelques Ko).</li><li>Rendre poc/repro.html qui l'affiche &rarr; ~2 Go alloues.</li></ol>
+<p class="muted">Fichiers d'exemple :</p>
+<ul><li><code>poc/repro.html</code></li><li><code>poc/make-bomb.py</code></li></ul>
+
+<h2>Correctif propose</h2>
+<p>Plafond de pixels applique avant <code>cairo_image_surface_create</code> sur toutes les voies
+ (stb/turbojpeg/webp) ; abaisser <code>STBI_MAX_DIMENSIONS</code>.</p>
+
+<h2>Configuration (defaut + configurable)</h2>
+<p><code>setMaxImagePixels</code> (defaut ~64 MP), configurable.</p>
+
+<footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
+Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>
+</div></body></html>

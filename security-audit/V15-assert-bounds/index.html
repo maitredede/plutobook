@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V15 - Bornes/downcasts valides uniquement par assert</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; Tous les problemes</a></div>
+<h1>V15 &middot; Bornes/downcasts valides uniquement par assert</h1>
+<p><span class="badge sev-low">Basse</span> &nbsp; <span class="muted">Robustesse (latent)</span></p>
+<div class="card">
+<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Fichier cle</b> <code>source/csstokenizer.h:239-286</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>Sous <code>NDEBUG</code> (release), les <code>assert</code> disparaissent : le drift de <code>m_offset</code> et les downcasts <code>to&lt;T&gt;()</code> deviennent des <code>static_cast</code> non verifies. Aucun bug prouve, mais primitive a fuzzer (type confusion sur les casts de table).</p>
+
+<h2>Localisation</h2>
+<ul><li><code>source/csstokenizer.h:239-286</code> &mdash; CSSTokenizerInputStream: bornes en assert seulement</li><li><code>source/pointer.h:227-236</code> &mdash; to&lt;T&gt;() : assert(is&lt;T&gt;()) puis static_cast</li><li><code>source/layout/tablebox.h:278,288</code> &mdash; casts structurels supposant l'invariant d'arbre</li></ul>
+
+<h2>Risque &amp; impact</h2>
+<p><strong>Impact potentiel</strong> : type confusion &rarr; corruption memoire si un chemin de fixup laisse un enfant non conforme.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Fuzzer l'entree publique sous ASan/UBSan avec des arbres de table malformes (V06/V07).</li></ol>
+<p class="muted">Fichiers d'exemple :</p>
+<ul><li><code>poc/note.md</code></li></ul>
+
+<h2>Correctif propose</h2>
+<p>Remplacer les <code>assert</code> de bornes des chemins chauds par des verifications actives en release ; renforcer les downcasts.</p>
+
+<h2>Configuration (defaut + configurable)</h2>
+<p>Correctif de robustesse.</p>
+
+<footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
+Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>
+</div></body></html>

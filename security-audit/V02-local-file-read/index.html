@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V02 - Lecture de fichiers locaux via file:// + traversal</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; Tous les problemes</a></div>
+<h1>V02 &middot; Lecture de fichiers locaux via file:// + traversal</h1>
+<p><span class="badge sev-crit">Critique</span> &nbsp; <span class="muted">Divulgation de fichiers locaux</span></p>
+<div class="card">
+<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Fichier cle</b> <code>source/resource/url.cpp:568-575</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>La base URL par defaut est le repertoire courant du process encode en <code>file://</code>
+ (<code>resource.cpp:380-386</code>). Les URL relatives resolvent donc sur le systeme de fichiers local,
+ et les URL <code>file://</code> absolues sont acceptees telles quelles. Aucune politique cross-scheme :
+ un document servi via <code>http://</code> peut referencer <code>file://</code>.</p>
+
+<h2>Localisation</h2>
+<ul><li><code>source/resource/resource.cpp:380-386</code> &mdash; baseUrl() = CWD du process en file://</li><li><code>source/resource/url.cpp:568-575</code> &mdash; Url::complete accepte les chemins absolus file:</li><li><code>source/resource/url.cpp:505-539</code> &mdash; normalisation des .. (correcte mais aboutit a un chemin absolu)</li><li><code>source/resource/resource.cpp:331-367</code> &mdash; branche non-curl: lecture directe de tout file://</li></ul>
+
+<h2>Risque &amp; impact</h2>
+<p><code>&lt;link rel=stylesheet href="file:///etc/passwd"&gt;</code>,
+ <code>&lt;img src="file:///proc/self/environ"&gt;</code>,
+ <code>@font-face{src:url(file:///etc/shadow)}</code> : le contenu est tire dans le pipeline (texte de
+ feuille de style parse, octets d'image/police decodes) et peut se retrouver reflete dans le PDF/PNG.
+ La normalisation des <code>..</code> n'empeche pas d'atteindre un chemin absolu.
+ <strong>Impact</strong> : lecture/exfiltration de fichiers locaux arbitraires.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Rendre <code>poc/repro.html</code> avec PlutoBook depuis n'importe quel repertoire.</li><li>Constater que le contenu de /etc/hostname (image) ou d'un fichier local (CSS) est charge.</li></ol>
+<p class="muted">Fichiers d'exemple :</p>
+<ul><li><code>poc/repro.html</code></li></ul>
+
+<h2>Correctif propose</h2>
+<p>Desactiver <code>file://</code> par defaut (opt-in explicite) et le soumettre au validateur
+ d'URL. En mode fichier autorise, offrir un confinement optionnel a un repertoire racine.</p>
+
+<h2>Configuration (defaut + configurable)</h2>
+<p>Defaut : <code>file://</code> desactive. Reactivation via <code>setAllowedProtocols</code>
+ incluant <code>file</code>. Confinement optionnel a une racine via le validateur d'URL.</p>
+
+<footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
+Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>
+</div></body></html>

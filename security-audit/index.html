@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PlutoBook - Audit de securite</title>
+<link rel="stylesheet" href="assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<h1>PlutoBook &mdash; Rapport d'audit de securite</h1>
+<p class="lead">Audit red-team du moteur de rendu HTML/XML/CSS/SVG &rarr; PDF. 16 problemes,
+classes par criticite.</p>
+<p><span class="badge sev-crit">2 Critique</span> &middot; <span class="badge sev-high">6 Haute</span> &middot; <span class="badge sev-medhigh">2 Moyenne+</span> &middot; <span class="badge sev-med">2 Moyenne</span> &middot; <span class="badge sev-low">3 Basse</span> &middot; <span class="badge sev-info">1 Info</span></p>
+
+<div class="card">
+<h3 style="margin-top:0">Resume executif</h3>
+<p>PlutoBook est robuste sur les bugs memoire directs des parseurs (buffers <code>std::string</code>/<code>vector</code>,
+lookahead borne) et bien protege contre XXE. Mais il a ete concu pour de l'<em>input de confiance</em> alors que
+son usage promu est le rendu serveur de HTML arbitraire. Sous ce modele de menace, il manque toute
+<strong>couche de politique de securite</strong> (allowlist de schema, filtrage d'adresse, validation d'URL)
+et tout <strong>budget</strong> (taille, profondeur, pixels, compte) dans le pipeline parse &rarr; layout.</p>
+<p><strong>Amplificateur transversal</strong> : le Heap PMR a un <code>operator delete</code> no-op
+(<code>heapstring.h:88</code>) &mdash; rien n'est libere avant la fin du rendu, donc chaque OOM ci-dessous
+est non recuperable.</p>
+</div>
+
+<h2>Problemes (par criticite)</h2>
+<table>
+<thead><tr><th>ID</th><th>Titre</th><th>Severite</th><th>Classe</th><th>Fichier cle</th><th>Statut</th></tr></thead>
+<tbody>
+<tr>
+<td><a href="V01-ssrf/">V01</a></td>
+<td><a href="V01-ssrf/">SSRF &amp; fetch multi-schema non filtre</a></td>
+<td><span class="badge sev-crit">Critique</span></td>
+<td>SSRF / requete forgee cote serveur</td>
+<td><code>source/resource/resource.cpp:284</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V02-local-file-read/">V02</a></td>
+<td><a href="V02-local-file-read/">Lecture de fichiers locaux via file:// + traversal</a></td>
+<td><span class="badge sev-crit">Critique</span></td>
+<td>Divulgation de fichiers locaux</td>
+<td><code>source/resource/url.cpp:568-575</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V03-font-freetype/">V03</a></td>
+<td><a href="V03-font-freetype/">Octets de police bruts transmis a FreeType/brotli</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Surface RCE (parsing de police)</td>
+<td><code>source/resource/fontresource.cpp:57</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V04-download-size/">V04</a></td>
+<td><a href="V04-download-size/">Aucune limite de taille de telechargement</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Deni de service (memoire)</td>
+<td><code>source/resource/resource.cpp:268-273</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V05-image-bomb/">V05</a></td>
+<td><a href="V05-image-bomb/">Bombe de decompression d'image (aucun budget pixel)</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Deni de service (memoire)</td>
+<td><code>source/resource/imageresource.cpp:100-193</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V06-table-colspan/">V06</a></td>
+<td><a href="V06-table-colspan/">colspan / col span de table non bornes</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Deni de service (memoire)</td>
+<td><code>source/layout/tablebox.cpp:1389</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V07-svg-use/">V07</a></td>
+<td><a href="V07-svg-use/">Expansion exponentielle de SVG &lt;use&gt; (billion laughs)</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Deni de service (memoire/CPU)</td>
+<td><code>source/svgdocument.cpp:336-406</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V08-recursion/">V08</a></td>
+<td><a href="V08-recursion/">Recursion non bornee : parsing CSS, layout, paint, destruction</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Deni de service (stack overflow)</td>
+<td><code>source/csstokenizer.h:173</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V09-page-count/">V09</a></td>
+<td><a href="V09-page-count/">Nombre de pages proportionnel a la hauteur + UB float&rarr;uint</a></td>
+<td><span class="badge sev-medhigh">Moyenne+</span></td>
+<td>DoS memoire + UB</td>
+<td><code>source/layout/pagebox.cpp:694-723</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V10-counter-pad/">V10</a></td>
+<td><a href="V10-counter-pad/">@counter-style pad / additive : chaine multi-Go</a></td>
+<td><span class="badge sev-medhigh">Moyenne+</span></td>
+<td>DoS memoire</td>
+<td><code>source/cssrule.cpp:855-878</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V11-stb-stride/">V11</a></td>
+<td><a href="V11-stb-stride/">Over-read stb&rarr;cairo (mauvais stride source)</a></td>
+<td><span class="badge sev-med">Moyenne</span></td>
+<td>Lecture hors-limites</td>
+<td><code>source/resource/imageresource.cpp:169-190</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V12-column-count/">V12</a></td>
+<td><a href="V12-column-count/">column-count non borne : boucle multi-milliards</a></td>
+<td><span class="badge sev-med">Moyenne</span></td>
+<td>DoS CPU</td>
+<td><code>source/layout/multicolumnbox.cpp:304-313</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V13-integer-ub/">V13</a></td>
+<td><a href="V13-integer-ub/">Overflow entier dans le parsing numerique</a></td>
+<td><span class="badge sev-low">Basse</span></td>
+<td>UB / robustesse</td>
+<td><code>source/htmldocument.cpp:224</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V14-decoder-returns/">V14</a></td>
+<td><a href="V14-decoder-returns/">Retours turbojpeg/webp non verifies + malloc non teste</a></td>
+<td><span class="badge sev-low">Basse</span></td>
+<td>Robustesse</td>
+<td><code>source/resource/imageresource.cpp:110-123</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V15-assert-bounds/">V15</a></td>
+<td><a href="V15-assert-bounds/">Bornes/downcasts valides uniquement par assert</a></td>
+<td><span class="badge sev-low">Basse</span></td>
+<td>Robustesse (latent)</td>
+<td><code>source/csstokenizer.h:239-286</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V16-expat-billion-laughs/">V16</a></td>
+<td><a href="V16-expat-billion-laughs/">Billion-laughs XML dependant de la version d'expat</a></td>
+<td><span class="badge sev-info">Info</span></td>
+<td>Info / dependance</td>
+<td><code>meson.build:8-11</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+</tbody>
+</table>
+
+<h2>Legende de severite</h2>
+<p>
+<span class="badge sev-crit">Critique</span> exploitation directe (SSRF, lecture de fichiers) &mdash;
+<span class="badge sev-high">Haute</span> DoS fiable / surface RCE &mdash;
+<span class="badge sev-medhigh">Moyenne+</span> DoS + UB &mdash;
+<span class="badge sev-med">Moyenne</span> over-read latent / DoS CPU &mdash;
+<span class="badge sev-low">Basse</span> UB / robustesse &mdash;
+<span class="badge sev-info">Info</span> dependance / posture.
+</p>
+<p class="muted">Voir aussi <code>FIX-GUIDE.md</code> (guide d'implementation des correctifs) et
+<code>PROGRESS.md</code> (journal de progression).</p>
+
+<footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
+Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>
+</div></body></html>

