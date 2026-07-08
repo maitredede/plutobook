@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V03 - Raw font bytes passed straight to FreeType/brotli</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V03 &middot; Raw font bytes passed straight to FreeType/brotli</h1>
+<p><span class="badge sev-high">High</span> &nbsp; <span class="muted">RCE surface (font parsing)</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/resource/fontresource.cpp:57</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>Bytes fetched from <code>@font-face{src:url(&hellip;)}</code> (any scheme) are passed
+ straight to FreeType with no magic-byte check, no size check, and no format allowlist:</p>
+ <pre><code>FT_New_Memory_Face(ftLibrary, (FT_Byte*)resource.content(),
+                   resource.contentLength(), 0, &amp;ftFace);  // fontresource.cpp:57</code></pre>
+ <p>If FreeType is built with brotli, the WOFF2 path routes these bytes through brotli + sfnt
+ reconstruction (a path with a long history of bugs).</p>
+
+<h2>Location</h2>
+<ul><li><code>source/resource/fontresource.cpp:46-63</code> &mdash; FT_New_Memory_Face on raw bytes</li><li><code>source/resource/fontresource.cpp:90</code> &mdash; FcFreeTypeCharSet walks the face</li><li><code>source/resource/fontresource.cpp:99-104</code> &mdash; supportsFormat only filters on the CSS format() hint</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><strong>Impact</strong>: RCE-class memory corruption, reducible to any CVE in the linked
+ FreeType/brotli version, reachable from a plain document. PlutoBook adds no pre-validation layer of
+ its own.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Host/point to a malformed or oversized font via @font-face.</li><li>Render poc/repro.html: the bytes are parsed by FreeType regardless of the declared format.</li><li>Under ASan, fuzz the font to exercise the parser (this documents the attack surface, not a specific PlutoBook bug).</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/repro.html</code></li><li><code>poc/make-evil-font.py</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Pre-validate size and magic bytes before <code>FT_New_Memory_Face</code>; enforce a format
+ allowlist; document/pin the FreeType+brotli version. Apply the size cap (V04) to fonts too.</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Configurable max font size (reasonable default). Configurable accepted formats.</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V05 - Image decompression bomb (no pixel budget)</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V05 &middot; Image decompression bomb (no pixel budget)</h1>
+<p><span class="badge sev-high">High</span> &nbsp; <span class="muted">Denial of service (memory)</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/resource/imageresource.cpp:100-193</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>There is no overall pixel budget. stb only bounds each axis (<code>1&lt;&lt;24</code>) and the
+ allocation overflow (~2 GB); a PNG of a few KB at ~23000&times;23000 decompresses to ~2 GB of RGBA.
+ turbojpeg accepts up to 65535&sup2; (~17 GB), webp up to 16383&sup2; (~1 GB), passed straight to
+ <code>cairo_image_surface_create</code>.</p>
+
+<h2>Location</h2>
+<ul><li><code>source/resource/imageresource.cpp:162-169</code> &mdash; stb: STBI_MAX_DIMENSIONS=1&lt;&lt;24, no total pixel cap</li><li><code>source/resource/imageresource.cpp:100-124</code> &mdash; turbojpeg: width/height unbounded going into cairo</li><li><code>source/resource/imageresource.cpp:139</code> &mdash; webp: config.input.width/height passed straight to cairo</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><strong>Impact</strong>: memory exhaustion from a tiny image (DoS).</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Generate the bomb: <code>python3 poc/make-bomb.py</code> (creates bomb.png, ~23000x23000, a few KB).</li><li>Render poc/repro.html, which displays it &rarr; ~2 GB allocated.</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/repro.html</code></li><li><code>poc/make-bomb.py</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Pixel cap applied before <code>cairo_image_surface_create</code> on all paths
+ (stb/turbojpeg/webp); lower <code>STBI_MAX_DIMENSIONS</code>.</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p><code>setMaxImagePixels</code> (default ~64 MP), configurable.</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

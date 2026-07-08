@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V11 - stb→cairo over-read (wrong source stride)</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V11 &middot; stb&rarr;cairo over-read (wrong source stride)</h1>
+<p><span class="badge sev-med">Medium</span> &nbsp; <span class="muted">Out-of-bounds read</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/resource/imageresource.cpp:169-190</code></div>
+</div>
+
+<h2>Nature</h2>
+<p><code>imageData</code> returned by stb is packed (<code>width*4</code> bytes/row) but is
+ indexed using <em>cairo's stride</em>. If cairo pads the stride beyond <code>width*4</code> (SIMD
+ alignment), rows with <code>y&gt;0</code> read past the end of the stb buffer.</p>
+
+<h2>Location</h2>
+<ul><li><code>source/resource/imageresource.cpp:175</code> &mdash; src = imageData + surfaceStride*y (imageData is packed width*4)</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><strong>Impact</strong>: heap over-read (info leak into the rendering / crash). Latent on the
+ common Linux cairo build where <code>stride == width*4</code> for ARGB32; active on a cairo build with
+ aligned strides.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Render an image that goes through stb (e.g. BMP/GIF) whose width makes width*4 not a multiple of cairo's alignment, on a cairo build with aligned strides.</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/make-bmp.py</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Use the packed source stride (<code>width*4</code>) to index <code>imageData</code>, not <code>surfaceStride</code>.</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Pure fix (no knob).</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

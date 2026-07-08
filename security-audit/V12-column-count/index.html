@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V12 - Unbounded column-count: multi-billion iteration loop</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V12 &middot; Unbounded column-count: multi-billion iteration loop</h1>
+<p><span class="badge sev-med">Medium</span> &nbsp; <span class="muted">CPU DoS</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/layout/multicolumnbox.cpp:304-313</code></div>
+</div>
+
+<h2>Nature</h2>
+<p><code>columns:2000000000</code> triggers an <code>O(runs)</code>-per-iteration loop over billions of iterations.</p>
+
+<h2>Location</h2>
+<ul><li><code>source/cssparser.cpp:1479-1486</code> &mdash; consumePositiveInteger: min 1, no max</li><li><code>source/layout/multicolumnbox.cpp:304-313</code> &mdash; O(runs) loop per iteration</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><strong>Impact</strong>: CPU hang (DoS). No per-column allocation on this path.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Render poc/repro.html &rarr; endless loop.</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/repro.html</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Cap <code>column-count</code>.</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Configurable max column count (sane default).</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V02 - Local file read via file:// + path traversal</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V02 &middot; Local file read via file:// + path traversal</h1>
+<p><span class="badge sev-crit">Critical</span> &nbsp; <span class="muted">Local file disclosure</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/resource/url.cpp:568-575</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>The default base URL is the process's current working directory encoded as <code>file://</code>
+ (<code>resource.cpp:380-386</code>). Relative URLs therefore resolve against the local filesystem, and
+ absolute <code>file://</code> URLs are accepted as-is. There is no cross-scheme policy: a document
+ served via <code>http://</code> can reference <code>file://</code>.</p>
+
+<h2>Location</h2>
+<ul><li><code>source/resource/resource.cpp:380-386</code> &mdash; baseUrl() = process CWD as file://</li><li><code>source/resource/url.cpp:568-575</code> &mdash; Url::complete accepts absolute file: paths</li><li><code>source/resource/url.cpp:505-539</code> &mdash; normalization of .. (correct, but still resolves to an absolute path)</li><li><code>source/resource/resource.cpp:331-367</code> &mdash; non-curl branch: direct read of any file://</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><code>&lt;link rel=stylesheet href="file:///etc/passwd"&gt;</code>,
+ <code>&lt;img src="file:///proc/self/environ"&gt;</code>,
+ <code>@font-face{src:url(file:///etc/shadow)}</code>: the content is pulled into the pipeline (stylesheet
+ text parsed, image/font bytes decoded) and can end up reflected in the PDF/PNG output.
+ Normalizing <code>..</code> does not prevent reaching an absolute path.
+ <strong>Impact</strong>: reading/exfiltrating arbitrary local files.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Render <code>poc/repro.html</code> with PlutoBook from any directory.</li><li>Observe that the content of /etc/hostname (image) or a local file (CSS) gets loaded.</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/repro.html</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Disable <code>file://</code> by default (explicit opt-in) and route it through the URL
+ validator. When file access is allowed, offer optional confinement to a root directory.</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Default: <code>file://</code> disabled. Re-enable via <code>setAllowedProtocols</code>
+ including <code>file</code>. Optional confinement to a root directory via the URL validator.</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

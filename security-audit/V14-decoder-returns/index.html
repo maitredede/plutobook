@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V14 - Unchecked turbojpeg/webp return values + untested malloc</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V14 &middot; Unchecked turbojpeg/webp return values + untested malloc</h1>
+<p><span class="badge sev-low">Low</span> &nbsp; <span class="muted">Robustness</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/resource/imageresource.cpp:110-123</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>The return value of <code>tjDecompress2</code> is ignored, and the <code>std::malloc</code> for the retained JPEG blob is not checked before <code>memcpy</code>.</p>
+
+<h2>Location</h2>
+<ul><li><code>source/resource/imageresource.cpp:115</code> &mdash; tjDecompress2 return value ignored</li><li><code>source/resource/imageresource.cpp:118-119</code> &mdash; std::malloc not checked before memcpy</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><strong>Impact</strong>: crash/DoS on allocation failure (amplified by V04).</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Provide a malformed/huge JPEG and observe the unchecked path (under ASan).</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/note.md</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Check every decoder return value and the <code>malloc</code> before use.</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Robustness fix.</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

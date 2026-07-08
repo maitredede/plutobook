@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PlutoBook - Security Audit</title>
+<link rel="stylesheet" href="assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<h1>PlutoBook &mdash; Security Audit Report</h1>
+<p class="lead">Red-team audit of the HTML/XML/CSS/SVG &rarr; PDF rendering engine. 16 findings,
+ranked by severity.</p>
+<p><span class="badge sev-crit">2 Critical</span> &middot; <span class="badge sev-high">6 High</span> &middot; <span class="badge sev-medhigh">2 Medium+</span> &middot; <span class="badge sev-med">2 Medium</span> &middot; <span class="badge sev-low">3 Low</span> &middot; <span class="badge sev-info">1 Info</span></p>
+
+<div class="card">
+<h3 style="margin-top:0">Executive summary</h3>
+<p>PlutoBook is robust against direct parser memory bugs (<code>std::string</code>/<code>vector</code>
+buffers, bounded lookahead) and well protected against XXE. But it was designed for
+<em>trusted input</em>, whereas its promoted use case is server-side rendering of arbitrary HTML. Under
+this threat model, it entirely lacks a <strong>security policy layer</strong> (scheme allowlist, address
+filtering, URL validation) and any <strong>budget</strong> (size, depth, pixels, count) in the
+parse &rarr; layout pipeline.</p>
+<p><strong>Cross-cutting amplifier</strong>: the PMR Heap has a no-op <code>operator delete</code>
+(<code>heapstring.h:88</code>) &mdash; nothing is freed before rendering finishes, so every OOM below
+is unrecoverable.</p>
+</div>
+
+<h2>Findings (by severity)</h2>
+<table>
+<thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Class</th><th>Key file</th><th>Status</th></tr></thead>
+<tbody>
+<tr>
+<td><a href="V01-ssrf/">V01</a></td>
+<td><a href="V01-ssrf/">SSRF &amp; unfiltered multi-scheme fetch</a></td>
+<td><span class="badge sev-crit">Critical</span></td>
+<td>SSRF / server-side forged request</td>
+<td><code>source/resource/resource.cpp:284</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V02-local-file-read/">V02</a></td>
+<td><a href="V02-local-file-read/">Local file read via file:// + path traversal</a></td>
+<td><span class="badge sev-crit">Critical</span></td>
+<td>Local file disclosure</td>
+<td><code>source/resource/url.cpp:568-575</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V03-font-freetype/">V03</a></td>
+<td><a href="V03-font-freetype/">Raw font bytes passed straight to FreeType/brotli</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>RCE surface (font parsing)</td>
+<td><code>source/resource/fontresource.cpp:57</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V04-download-size/">V04</a></td>
+<td><a href="V04-download-size/">No download size limit</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>Denial of service (memory)</td>
+<td><code>source/resource/resource.cpp:268-273</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V05-image-bomb/">V05</a></td>
+<td><a href="V05-image-bomb/">Image decompression bomb (no pixel budget)</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>Denial of service (memory)</td>
+<td><code>source/resource/imageresource.cpp:100-193</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V06-table-colspan/">V06</a></td>
+<td><a href="V06-table-colspan/">Unbounded table colspan / col span</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>Denial of service (memory)</td>
+<td><code>source/layout/tablebox.cpp:1389</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V07-svg-use/">V07</a></td>
+<td><a href="V07-svg-use/">Exponential SVG &lt;use&gt; expansion (billion laughs)</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>Denial of service (memory/CPU)</td>
+<td><code>source/svgdocument.cpp:336-406</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V08-recursion/">V08</a></td>
+<td><a href="V08-recursion/">Unbounded recursion: CSS parsing, layout, paint, destruction</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>Denial of service (stack overflow)</td>
+<td><code>source/csstokenizer.h:173</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V09-page-count/">V09</a></td>
+<td><a href="V09-page-count/">Page count proportional to height + float&rarr;uint UB</a></td>
+<td><span class="badge sev-medhigh">Medium+</span></td>
+<td>Memory DoS + UB</td>
+<td><code>source/layout/pagebox.cpp:694-723</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V10-counter-pad/">V10</a></td>
+<td><a href="V10-counter-pad/">@counter-style pad / additive: multi-GB string</a></td>
+<td><span class="badge sev-medhigh">Medium+</span></td>
+<td>Memory DoS</td>
+<td><code>source/cssrule.cpp:855-878</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V11-stb-stride/">V11</a></td>
+<td><a href="V11-stb-stride/">stb&rarr;cairo over-read (wrong source stride)</a></td>
+<td><span class="badge sev-med">Medium</span></td>
+<td>Out-of-bounds read</td>
+<td><code>source/resource/imageresource.cpp:169-190</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V12-column-count/">V12</a></td>
+<td><a href="V12-column-count/">Unbounded column-count: multi-billion iteration loop</a></td>
+<td><span class="badge sev-med">Medium</span></td>
+<td>CPU DoS</td>
+<td><code>source/layout/multicolumnbox.cpp:304-313</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V13-integer-ub/">V13</a></td>
+<td><a href="V13-integer-ub/">Integer overflow in numeric parsing</a></td>
+<td><span class="badge sev-low">Low</span></td>
+<td>UB / robustness</td>
+<td><code>source/htmldocument.cpp:224</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V14-decoder-returns/">V14</a></td>
+<td><a href="V14-decoder-returns/">Unchecked turbojpeg/webp return values + untested malloc</a></td>
+<td><span class="badge sev-low">Low</span></td>
+<td>Robustness</td>
+<td><code>source/resource/imageresource.cpp:110-123</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V15-assert-bounds/">V15</a></td>
+<td><a href="V15-assert-bounds/">Bounds/downcasts validated only by assert</a></td>
+<td><span class="badge sev-low">Low</span></td>
+<td>Robustness (latent)</td>
+<td><code>source/csstokenizer.h:239-286</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V16-expat-billion-laughs/">V16</a></td>
+<td><a href="V16-expat-billion-laughs/">XML billion-laughs protection depends on the expat version</a></td>
+<td><span class="badge sev-info">Info</span></td>
+<td>Info / dependency</td>
+<td><code>meson.build:8-11</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+</tbody>
+</table>
+
+<h2>Severity legend</h2>
+<p>
+<span class="badge sev-crit">Critical</span> directly exploitable (SSRF, file read) &mdash;
+<span class="badge sev-high">High</span> reliable DoS / RCE surface &mdash;
+<span class="badge sev-medhigh">Medium+</span> DoS + UB &mdash;
+<span class="badge sev-med">Medium</span> latent over-read / CPU DoS &mdash;
+<span class="badge sev-low">Low</span> UB / robustness &mdash;
+<span class="badge sev-info">Info</span> dependency / posture.
+</p>
+<p class="muted">See also <code>FIX-GUIDE.md</code> (fix implementation guide) and
+<code>PROGRESS.md</code> (progress log).</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

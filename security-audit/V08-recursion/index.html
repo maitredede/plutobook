@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V08 - Unbounded recursion: CSS parsing, layout, paint, destruction</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V08 &middot; Unbounded recursion: CSS parsing, layout, paint, destruction</h1>
+<p><span class="badge sev-high">High</span> &nbsp; <span class="muted">Denial of service (stack overflow)</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/csstokenizer.h:173</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>There is no depth limit anywhere. Vectors: CSS token blocks
+ (<code>((((&hellip;</code>, <code>[[[[&hellip;</code>), nested functional pseudo-classes
+ (<code>:not(:not(&hellip;))</code>), nested at-rules, and above all deep trees: HTML parsing is
+ iterative, but finalization, cloning, <em>layout</em>, paint, and <em>destruction</em>
+ (<code>~Box</code>) all recurse by depth.</p>
+
+<h2>Location</h2>
+<ul><li><code>source/csstokenizer.h:173-206</code> &mdash; consumeComponent recurses one frame per nested ( [ {</li><li><code>source/cssparser.cpp:740-858</code> &mdash; consumePseudoSelector: nested :is()/:not()/:where()/:has()</li><li><code>source/cssparser.cpp:365-373</code> &mdash; nested at-rules @media{@media{...}}</li><li><code>source/document.cpp:267,236</code> &mdash; finishParsingDocument / cloneChildren recurse by depth</li><li><code>source/layout/blockbox.cpp:1541</code> &mdash; recursive layout; source/layout/box.cpp:37 recursive destruction</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><code>&lt;div&gt;</code>&times;200000 or <code>((((&hellip;</code> (200k) &rarr; stack overflow &rarr; SIGSEGV (DoS).</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Generate: <code>python3 poc/make-deep.py</code> (creates deep.html and deep.css).</li><li>Render each file &rarr; crash from stack overflow.</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/make-deep.py</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Shared depth counter (modeled on <code>kMaxImportDepth=256</code>,
+ <code>cssstylesheet.cpp:970</code>) applied in <code>consumeComponent</code>/<code>consumeBlock</code>,
+ selector/at-rule recursion, parsing (nesting limit), and layout.</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Configurable max nesting depth, <strong>default ~512</strong>.</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

