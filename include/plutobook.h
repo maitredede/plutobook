@@ -777,6 +777,23 @@ PLUTOBOOK_API void plutobook_set_max_use_depth(unsigned int max);
 PLUTOBOOK_API void plutobook_set_max_nesting_depth(unsigned int max);
 
 /**
+ * @brief Sets the maximum number of pages a paginated layout is allowed to generate.
+ *
+ * The page count is `ceil(documentHeight / pageContainerHeight)`, and each page is a heap-allocated
+ * `PageBox` subtree (plus its margin boxes) that is never freed until layout tears down. Without a
+ * bound, a tiny document (e.g. `html { height: 1000000000px }` with a small `@page` size) forces
+ * millions or billions of page allocations, exhausting memory.
+ *
+ * Once the computed page count exceeds this limit, it is clamped down to it.
+ *
+ * If not set, the default is 100000. Passing `0` disables the limit -- not recommended for untrusted
+ * input.
+ *
+ * @param max The maximum accepted page count, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_page_count(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {

@@ -10,6 +10,7 @@
 #include "cssproperty.h"
 #include "htmldocument.h"
 #include "box.h"
+#include "plutobook.hpp"
 
 namespace plutobook {
 
@@ -17,9 +18,13 @@ Counters::Counters(Document* document, uint32_t pageCount)
     : m_document(document)
     , m_pageCount(pageCount)
 {
+    if(auto maxPageCount = engineLimits()->maxPageCount(); maxPageCount && m_pageCount > maxPageCount) {
+        m_pageCount = maxPageCount;
+    }
+
     if(m_pageCount) {
         m_scopes.push_back({pagesGlo});
-        m_values[pagesGlo].push_back(pageCount);
+        m_values[pagesGlo].push_back(m_pageCount);
     }
 }
 

@@ -936,6 +936,33 @@ public:
      */
     uint32_t maxNestingDepth() const { return m_maxNestingDepth; }
 
+    /**
+     * @brief Sets the maximum number of pages a paginated layout is allowed to generate.
+     *
+     * The number of pages a document produces is `ceil(documentHeight / pageContainerHeight)`, and
+     * each page is a heap-allocated `PageBox` subtree (plus its margin boxes) that lives for the
+     * lifetime of the document -- none of it is freed until layout tears down. A tiny document such
+     * as `html { height: 1000000000px }` combined with a small `@page` size therefore forces millions
+     * or billions of `PageBox` allocations from a few bytes of input, exhausting memory long before
+     * anything is painted.
+     *
+     * Once the computed page count exceeds this limit, it is clamped down to it: only this many pages
+     * are built, and the `pages` counter (used by `counter(pages)` in page margin content, e.g. "Page
+     * X of Y") reflects the clamped count rather than the unbounded one.
+     *
+     * If not set, the default is 100000, comfortably above any page count produced by legitimate
+     * documents. Passing `0` disables the limit -- not recommended for untrusted input.
+     *
+     * @param max The maximum accepted page count, or `0` for no limit.
+     */
+    void setMaxPageCount(uint32_t max) { m_maxPageCount = max; }
+
+    /**
+     * @brief Returns the maximum number of pages a paginated layout is allowed to generate.
+     * @return The configured page count cap. See `setMaxPageCount()`.
+     */
+    uint32_t maxPageCount() const { return m_maxPageCount; }
+
 private:
     EngineLimits();
 
@@ -943,6 +970,7 @@ private:
     uint32_t m_maxUseExpansion = 100000;
     uint32_t m_maxUseDepth = 512;
     uint32_t m_maxNestingDepth = 512;
+    uint32_t m_maxPageCount = 100000;
 
     friend EngineLimits* engineLimits();
 };

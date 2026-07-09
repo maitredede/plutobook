@@ -523,6 +523,11 @@ void plutobook_set_max_nesting_depth(unsigned int max)
     plutobook::engineLimits()->setMaxNestingDepth(max);
 }
 
+void plutobook_set_max_page_count(unsigned int max)
+{
+    plutobook::engineLimits()->setMaxPageCount(max);
+}
+
 struct _plutobook final : public plutobook::Book, public plutobook::ResourceFetcher {
     _plutobook(plutobook_page_size_t size, plutobook_page_margins_t margins, plutobook_media_type_t media);
     plutobook::ResourceData fetchUrl(const std::string& url) final;

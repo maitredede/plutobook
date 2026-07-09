@@ -532,13 +532,32 @@ add(
  poc={
   "repro.html": """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
-  @page { size: 20px 20px; }
+  @page { size: 20px 20px; margin: 0; }
   html { height: 1000000000px; }
 </style></head><body>x</body></html>
 """,
  },
- fix="<p>Configurable page count cap + <code>UINT32_MAX</code> guard before conversion.</p>",
- config="Configurable max page count (sane default).",
+ fix="""<p>Two complementary guards: (1) in <code>PageLayout::layout()</code>
+ (<code>source/layout/pagebox.cpp</code>), the result of <code>ceil(height/containerHeight)</code> is
+ computed as a <code>double</code> and clamped to a finite value <code>&le; UINT32_MAX</code> before
+ the conversion to <code>uint32_t</code> (avoids UB if the input produces an astronomical
+ height/ratio); (2) the <code>Counters::Counters(Document*, uint32_t pageCount)</code> constructor
+ (<code>source/counters.cpp</code>) then clamps that count to the configurable cap -- the
+ <code>PageBox</code>-building loop reads <code>counters.pageCount()</code>, so this single point is
+ enough to bound both the number of pages actually built and the <code>pages</code> counter exposed
+ to <code>counter(pages)</code> ("Page X of Y" numbering in page margins).</p>
+ <p><em>Known limitation, out of scope</em>: while verifying this fix, a pre-existing, unrelated
+ defect was found in PDF writing (Cairo 1.18.4 library): beyond 65536 total pages in a single
+ document, the produced PDF file becomes unreadable (corrupted trailer/xref, same observation under
+ <code>poppler</code> and <code>ghostscript</code>), reproducible both on unmodified code (at a
+ controlled page count, unrelated to V09) and on this fix. The <code>maxPageCount=100000</code>
+ default below is above that threshold: a document that actually reaches the cap can therefore
+ produce a corrupt PDF rather than a valid one (but the process itself does not crash and does not
+ consume unbounded memory -- V09's memory/UB goal is met). Fixing PDF writing itself is out of scope
+ for V09 (a separate bug, on the Cairo/PDF serialization side, not pagination/conversion) -- a
+ candidate for a future dedicated fix.</p>""",
+ config="Configurable cap via <code>EngineLimits::setMaxPageCount</code> (default 100000 pages, <code>0</code> = unlimited -- not recommended); C API <code>plutobook_set_max_page_count</code>.",
+ status="done",
 )
 
 add(
