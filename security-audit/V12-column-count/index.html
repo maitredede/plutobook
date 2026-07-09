@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V12 &middot; column-count non borne : boucle multi-milliards</h1>
 <p><span class="badge sev-med">Moyenne</span> &nbsp; <span class="muted">DoS CPU</span></p>
 <div class="card">
-<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Statut</b> <span class="status-done">corrige</span></div>
 <div class="kv"><b>Fichier cle</b> <code>source/layout/multicolumnbox.cpp:304-313</code></div>
 </div>
 
@@ -34,10 +34,25 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <ul><li><code>poc/repro.html</code></li></ul>
 
 <h2>Correctif propose</h2>
-<p>Plafonner <code>column-count</code>.</p>
+<p><code>BoxStyle::columnCount()</code> (le seul point de conversion de la valeur CSS
+ <code>column-count</code> en entier utilise par le layout multi-colonnes, appele depuis
+ <code>MultiColumnFlowBox::computeWidth</code> et <code>computePreferredWidths</code>) clampe la valeur
+ analysee a <code>EngineLimits::maxColumnCount()</code> avant de la renvoyer, plutot que de la laisser
+ telle quelle (potentiellement ~2 milliards). Le minimum de 1 deja garanti par
+ <code>consumePositiveInteger</code> (partage avec <code>widows</code>/<code>orphans</code>, donc non
+ touche) reste inchange. La boucle <code>O(runs)</code> de
+ <code>MultiColumnRowBox::distributeImplicitBreaks</code> ne peut alors plus depasser ce plafond
+ d'iterations.</p>
 
 <h2>Configuration (defaut + configurable)</h2>
-<p>Nombre de colonnes max configurable (defaut sain).</p>
+<p>Nouvelle limite <code>EngineLimits::maxColumnCount</code> (<code>setMaxColumnCount</code> /
+ <code>maxColumnCount()</code>), <strong>defaut 1000</strong>, <code>0</code> = illimite (non
+ recommande). API C <code>plutobook_set_max_column_count(unsigned int)</code>. Verifie :
+ <code>columns:2000000000</code> passe d'un hang (&gt;8s, tue par timeout, aucun PDF valide) a un rendu
+ en ~0.05s (PDF valide) une fois le plafond applique ; <code>columns:3</code> sur un bloc de texte
+ produit toujours un rendu 3 colonnes correct (non-regression) ; un plafond abaisse via un harnais de
+ test (C API, ex. maxColumnCount=1/5) reduit d'autant le nombre de colonnes reellement utilisees,
+ mesure indirectement par le nombre de pages produites pour un meme contenu.</p>
 
 <footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
 Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>

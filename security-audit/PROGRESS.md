@@ -21,8 +21,8 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 | [x] | V08 | Récursion non bornée | Haute | 583dfcf |
 | [x] | V09 | Nombre de pages | Moyenne+ | 99efe35 |
 | [x] | V10 | @counter-style pad / additive | Moyenne+ | 37c94d1 |
-| [x] | V11 | Stride stb→cairo | Moyenne | voir `git log` |
-| [ ] | V12 | column-count | Moyenne | — |
+| [x] | V11 | Stride stb→cairo | Moyenne | 40ad76d |
+| [x] | V12 | column-count | Moyenne | voir `git log` |
 | [ ] | V13 | Overflow entier | Basse | — |
 | [ ] | V14 | Retours turbojpeg/webp | Basse | — |
 | [ ] | V15 | Bornes en assert (latent) | Basse | — |

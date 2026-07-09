@@ -992,6 +992,30 @@ public:
      */
     uint32_t maxCounterLength() const { return m_maxCounterLength; }
 
+    /**
+     * @brief Sets the maximum value accepted for the `column-count` CSS property.
+     *
+     * Multicolumn layout distributes content across `column-count` columns by repeatedly walking the
+     * row's existing column runs (`distributeImplicitBreaks()`), an `O(runs)` operation per column
+     * added. Since `column-count` has no upper bound at parse time, a declaration such as
+     * `columns: 2000000000` forces that loop to run billions of times, hanging the CPU on a few bytes
+     * of CSS with no image/table/DOM growth involved -- nothing else would catch it.
+     *
+     * Values above this limit are clamped down to it; the existing minimum of 1 still applies below it.
+     *
+     * If not set, the default is 1000, far above any column count a legitimate print/page layout would
+     * use. Passing `0` disables the limit -- not recommended for untrusted input.
+     *
+     * @param max The maximum accepted `column-count` value, or `0` for no limit.
+     */
+    void setMaxColumnCount(uint32_t max) { m_maxColumnCount = max; }
+
+    /**
+     * @brief Returns the maximum value accepted for the `column-count` CSS property.
+     * @return The configured column-count cap. See `setMaxColumnCount()`.
+     */
+    uint32_t maxColumnCount() const { return m_maxColumnCount; }
+
 private:
     EngineLimits();
 
@@ -1001,6 +1025,7 @@ private:
     uint32_t m_maxNestingDepth = 512;
     uint32_t m_maxPageCount = 100000;
     uint32_t m_maxCounterLength = 100000;
+    uint32_t m_maxColumnCount = 1000;
 
     friend EngineLimits* engineLimits();
 };

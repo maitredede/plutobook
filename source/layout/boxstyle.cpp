@@ -804,7 +804,16 @@ std::optional<int> BoxStyle::columnCount() const
     auto value = get(CSSPropertyID::ColumnCount);
     if(value == nullptr)
         return std::nullopt;
-    return convertIntegerOrAuto(*value);
+    auto count = convertIntegerOrAuto(*value);
+    // Clamp at EngineLimits::maxColumnCount() (0 there means "unlimited"): multicolumn layout
+    // distributes content across this many columns with an O(runs) loop per column added, so an
+    // unbounded value (e.g. "columns: 2000000000") hangs the CPU on a few bytes of CSS.
+    if(count) {
+        if(auto maxColumnCount = engineLimits()->maxColumnCount())
+            count = std::min(count.value(), static_cast<int>(maxColumnCount));
+    }
+
+    return count;
 }
 
 std::optional<float> BoxStyle::pageScale() const
