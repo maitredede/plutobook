@@ -19,8 +19,8 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 | [x] | V06 | colspan / col span | Haute | c35e686 |
 | [x] | V07 | Expansion SVG `<use>` | Haute | 7897a70 |
 | [x] | V08 | Récursion non bornée | Haute | 583dfcf |
-| [x] | V09 | Nombre de pages | Moyenne+ | voir `git log` |
-| [ ] | V10 | @counter-style pad / additive | Moyenne+ | — |
+| [x] | V09 | Nombre de pages | Moyenne+ | 99efe35 |
+| [x] | V10 | @counter-style pad / additive | Moyenne+ | voir `git log` |
 | [ ] | V11 | Stride stb→cairo | Moyenne | — |
 | [ ] | V12 | column-count | Moyenne | — |
 | [ ] | V13 | Overflow entier | Basse | — |

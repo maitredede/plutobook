@@ -12,6 +12,7 @@
 #include "boxstyle.h"
 #include "uastylesheet.h"
 #include "stringutils.h"
+#include "plutobook.hpp"
 
 #include <unicode/uiter.h>
 
@@ -758,13 +759,19 @@ std::string CSSCounterStyle::generateInitialRepresentation(int value) const
                 }
             }
         } else {
+            // Bounds the number of symbols this loop appends (V10): a low-weight symbol (e.g.
+            // `additive-symbols: 1 "x"`) combined with a huge counter value would otherwise repeat
+            // `value / weight` times, growing the representation to gigabytes. `value` is still
+            // decremented by the full `repetitions * weight` below so the additive algorithm's
+            // "exact representation or fail" check keeps working; only the string growth is capped.
+            auto maxCounterLength = engineLimits()->maxCounterLength();
             for(const auto& symbol : *m_additiveSymbols) {
                 const auto& pair = to<CSSPairValue>(*symbol);
                 const auto& weight = to<CSSIntegerValue>(*pair.first());
                 if(weight.value() == 0)
                     continue;
                 size_t repetitions = value / weight.value();
-                for(size_t i = 0; i < repetitions; ++i)
+                for(size_t i = 0; i < repetitions && (!maxCounterLength || representation.length() < maxCounterLength); ++i)
                     representation += counterStyleSymbol(*pair.second());
                 value -= repetitions * weight.value();
                 if(value == 0) {
@@ -873,7 +880,11 @@ std::string CSSCounterStyle::generateRepresentation(int value) const
     std::string representation;
     if(needsNegativeSign(value))
         representation += negativePrefix;
-    for(size_t i = 0; i < padRepetitions; ++i)
+    // Bounds the number of pad symbols appended (V10): `pad: 2000000000 "x"` would otherwise repeat
+    // `padSymbol` up to two billion times, growing the representation to gigabytes before it is
+    // copied onto the heap. Stop once the representation reaches the configured cap instead.
+    auto maxCounterLength = engineLimits()->maxCounterLength();
+    for(size_t i = 0; i < padRepetitions && (!maxCounterLength || representation.length() < maxCounterLength); ++i)
         representation += padSymbol;
     representation += initialRepresentation;
     if(needsNegativeSign(value))

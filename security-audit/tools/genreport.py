@@ -579,8 +579,24 @@ add(
 </style></head><body><ol><li>a</li></ol></body></html>
 """,
  },
- fix="<p>Plafonner la longueur de <code>pad</code> et le nombre de repetitions additives.</p>",
- config="Longueur max de representation de compteur configurable (defaut sain).",
+ fix="""<p>Les deux boucles de generation (<code>CSSCounterStyle::generateRepresentation</code> pour
+ <code>pad</code>, <code>CSSCounterStyle::generateInitialRepresentation</code> pour le systeme
+ <code>additive</code>) s'arretent d'ajouter des symboles a la representation en construction des
+ qu'elle atteint <code>EngineLimits::maxCounterLength()</code>, plutot que de continuer jusqu'a la
+ valeur brute (potentiellement ~2 milliards) demandee par le CSS. Pour la branche additive, la
+ soustraction <code>value -= repetitions * weight</code> reste effectuee en entier sur la valeur
+ complete (cout O(1), pas de memoire) afin que l'algorithme "representation exacte ou echec" du
+ systeme additif continue de fonctionner correctement ; seule la croissance de la chaine est
+ plafonnee.</p>""",
+ config="""Nouvelle limite <code>EngineLimits::maxCounterLength</code> (<code>setMaxCounterLength</code> /
+ <code>maxCounterLength()</code>), <strong>defaut 100000</strong> caracteres, <code>0</code> = illimite
+ (non recommande). API C <code>plutobook_set_max_counter_length(unsigned int)</code>. Verifie :
+ <code>pad: 2000000000 "x"</code> et une variante additive (<code>additive-symbols: 1 "x"</code> +
+ <code>counter-increment</code> de 2 milliards) produisent chacun une representation bornee a
+ exactement 100000/100001 caracteres (mesure directe) au lieu de ~2 milliards, rendu en &lt;0.15s au
+ lieu d'un OOM ; un plafond abaisse via un harnais de test (ex. 5/10/50) reborne la representation en
+ conséquence.""",
+ status="done",
 )
 
 add(
