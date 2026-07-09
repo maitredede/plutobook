@@ -877,6 +877,29 @@ PLUTOBOOK_API void plutobook_set_max_text_node_length(unsigned int max);
 PLUTOBOOK_API void plutobook_set_max_table_nesting_depth(unsigned int max);
 
 /**
+ * @brief Sets the maximum number of extra relayout passes multicolumn column-height balancing is
+ * allowed to perform.
+ *
+ * An auto-height multicolumn box balances its column height by iterating: lay out the whole flow,
+ * check how many columns that height would need, and if it is more than the column count, grow the
+ * height and lay out the whole flow again. The initial guess is exact for content without explicit
+ * column breaks and close otherwise, so this converges in one or two passes for every content shape
+ * tried (large paragraphs, many blocks of varying heights, multiple spanners) -- but nothing in the
+ * loop's exit condition actually bounds the iteration count, so pathological content could in
+ * principle force many corrections, each a full relayout of the flow.
+ *
+ * Once this many extra relayout passes have run without the column height converging, balancing
+ * stops where it is: columns may be very slightly less evenly filled than an unbounded search would
+ * have produced, but layout is otherwise correct and terminates.
+ *
+ * If not set, the default is 10. Passing `0` disables the limit -- not recommended for untrusted
+ * input.
+ *
+ * @param max The maximum accepted number of extra balancing relayout passes, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_column_balancing_iterations(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {

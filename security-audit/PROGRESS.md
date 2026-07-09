@@ -31,7 +31,7 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`). **Pousser a
 | [x] | V18 | Défaut maxPageCount > limite PDF Cairo | Moyenne | voir git log |
 | [x] | V19 | `Heap::concatenateString` O(n²) | Haute | voir git log |
 | [x] | V20 | Layout tables imbriquées exponentiel | Haute | voir git log |
-| [ ] | V21 | Balancing multicolonne superlinéaire | Moyenne | — |
+| [x] | V21 | Balancing multicolonne superlinéaire | Moyenne | voir git log |
 
 **V01–V16 corrigés** (rebuild propre OK, PoC intégrés vérifiés). **V17–V21** = problèmes découverts
 pendant les correctifs, désormais suivis et traités dans l'ordre : V17 → V18 → V19 → V20 → V21.
@@ -77,7 +77,27 @@ pendant les correctifs, désormais suivis et traités dans l'ordre : V17 → V18
   8 incluse, identique) ; ne diffère qu'au-delà (profondeur 9+, et seulement quand une ligne a des
   cellules de hauteurs naturelles différentes). (V08)
 - **V21** — Balancing multicolonne superlinéaire en taille de contenu, même à `column-count`
-  légitime. Perf/DoS CPU, distinct de V12. (V12)
+  légitime. Diagnostic **corrigé** par instrumentation (chronométrage par ligne/par passe) : la boucle
+  de balancing (`MultiColumnFlowBox::layoutContents()`) n'est **pas** en cause — l'estimation initiale
+  (`distributeImplicitBreaks()`) vaut exactement `hauteurTotale / columnCount` sans saut de colonne
+  explicite (vérifié algébriquement et sur de nombreuses formes de contenu adversarial) : convergence
+  systématique en 1-2 itérations, quelle que soit la taille du contenu. Le vrai coût superlinéaire
+  (chronométrage ligne par ligne : ~4-5× plus cher en fin de document qu'en début) vient de
+  `TextShapeRun::positionForOffset()`/`offsetForPosition()` (`source/graphics/textshape.cpp`, hors de ce
+  fichier) : ces fonctions re-parcourent le tableau de glyphes depuis l'indice 0 à chaque appel au lieu
+  de reprendre depuis une position mémorisée — reproductible à l'identique sur du texte simple sans
+  colonnes. Hors périmètre de ce correctif (fichier différent, effet de bord large sur tout layout de
+  texte) — **signalé comme piste de suivi séparée** pour une prochaine entrée d'audit. Correctif livré
+  ici (repli documenté) : nouvelle limite `EngineLimits::maxColumnBalancingIterations` (défaut **10**,
+  configurable, 0 = illimité) bornant le nombre de passes de relayout du balancing, pour garantir la
+  terminaison même si une forme de contenu future déjouait l'estimation initiale (aujourd'hui exacte en
+  pratique mais non prouvée pour toute entrée adversariale). Vérifié : non-régression par comparaison
+  PDF **octet pour octet** (binaire pré-fix via `git stash` + build séparé) sur documents 2/3 colonnes,
+  `column-gap`, `column-span:all` (identiques) ; défaut (10) identique au byte près à illimité (0) sur
+  le PoC et sur un document à spanners multiples ; cap volontairement bas (1, harnais C dédié) déclenche
+  bien un arrêt anticipé mesurable (PDF différent) tout en gardant un rendu complet et valide (aucun
+  contenu perdu). Mise en garde : ce correctif ne fait **pas** converger le PoC littéral vers un temps
+  linéaire, la cause dominante étant hors périmètre (voir ci-dessus). (V12)
 
 ## Notes
 

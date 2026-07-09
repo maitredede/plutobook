@@ -974,13 +974,35 @@ add(
  title="Balancing multicolonne superlineaire en taille de contenu",
  keyfile="source/layout/multicolumnbox.cpp",
  locations=[
-   ("source/layout/multicolumnbox.cpp", "algorithme de balancing (relayout repete)"),
+   ("source/layout/multicolumnbox.cpp", "MultiColumnFlowBox::layoutContents(): boucle de balancing sans borne d'iterations"),
+   ("include/plutobook.hpp", "EngineLimits::maxColumnBalancingIterations"),
  ],
- nature="""<p>L'equilibrage des colonnes est superlineaire en taille de contenu, meme a
- <code>column-count</code> legitime : un gros contenu multicolonne prend des dizaines de secondes.
- Distinct de V12 (qui borne le <em>nombre</em> de colonnes) : ici c'est le cout du balancing.</p>""",
- risk="<p><strong>Impact</strong> : hang/lenteur CPU (DoS) a partir d'un contenu multicolonne volumineux.</p>",
- repro=["Generer poc/make-multicol.py (gros contenu, columns:3) &rarr; rendre &rarr; lent pre-fix, borne post-fix."],
+ nature="""<p>Diagnostic corrige par instrumentation temporaire (chronometrage par ligne et par passe) :
+ la boucle de balancing (<code>MultiColumnFlowBox::layoutContents()</code>,
+ <code>while(changed) {{ ...; changed = layoutColumns(true); }}</code>) n'est <strong>pas</strong> la
+ cause du cout superlineaire observe sur le PoC. L'estimation initiale de hauteur de colonne
+ (<code>distributeImplicitBreaks()</code> / <code>calculateColumnHeight(false)</code>) vaut exactement
+ <code>hauteurTotale / columnCount</code> des lors qu'il n'y a pas de saut de colonne explicite -- verifie
+ a la fois algebriquement et empiriquement sur de nombreuses formes de contenu (paragraphe uniforme,
+ centaines de blocs de hauteurs aleatoires, dizaines de <code>column-span:all</code>) : la boucle converge
+ systematiquement en 1 ou 2 iterations, quelle que soit la taille du contenu. Le veritable cout
+ superlineaire (confirme par chronometrage ligne par ligne : le cout par ligne croit avec la position dans
+ le document, environ 4 a 5 fois plus cher vers la ligne 4000 que vers la ligne 200 d'un meme document)
+ vient de <code>TextShapeRun::positionForOffset()</code> / <code>offsetForPosition()</code>
+ (<code>source/graphics/textshape.cpp</code>, hors de ce fichier) : ces fonctions re-parcourent le tableau
+ de glyphes depuis l'indice 0 a chaque appel au lieu de reprendre depuis une position memorisee, ce qui
+ rend chaque nouvelle ligne d'un long passage de texte O(position) et le document entier O(n&sup2;) --
+ reproductible a l'identique sur du texte simple <strong>sans colonnes</strong> (meme mise a l'echelle
+ mesuree sur du contenu paginee normal). C'est donc un cout partage par tout layout de texte long, distinct
+ du balancing multicolonne et hors perimetre de ce correctif ; signale comme piste de suivi separee. Ce
+ qui reste reel et propre a ce fichier : rien dans la condition de sortie de la boucle de balancing ne
+ garantit formellement sa terminaison rapide -- la convergence en 1-2 iterations est un fait
+ empirique/algebrique pour les formes de contenu testees, pas une propriete prouvee pour toute entree
+ adversariale future.</p>""",
+ risk="""<p><strong>Impact</strong> : le contenu multicolonne volumineux herite d'un cout de layout de
+ texte superlineaire (hors perimetre, voir Nature) ; independamment, la boucle de balancing elle-meme
+ n'avait aucune borne explicite sur son nombre d'iterations.</p>""",
+ repro=["Generer poc/make-multicol.py (gros contenu, columns:3) &rarr; rendre &rarr; lent avant et apres ce correctif (cause reelle hors perimetre, cf. Nature) ; le cap d'iterations est verifie separement via un harnais C dedie (cap artificiellement bas = convergence anticipee mesurable et PDF toujours complet ; cap par defaut = identique au byte pres a l'illimite)."],
  poc={
   "make-multicol.py": """#!/usr/bin/env python3
 # Gros contenu multicolonne pour exercer le balancing.
@@ -990,9 +1012,32 @@ open("multicol.html","w").write(
 print("multicol.html ecrit")
 """,
  },
- fix="""<p>Borner le nombre d'iterations de balancing (ou ameliorer l'algorithme), configurable, sans
- casser l'equilibrage des documents normaux.</p>""",
- config="Nombre d'iterations de balancing borne (defaut sain, configurable).",
+ fix="""<p>Repli explicitement documente : l'alternative "correctif algorithmique propre" (recherche
+ binaire de la hauteur de colonne en O(log) iterations au lieu de l'increment-par-shortage-minimal
+ actuel) a ete ecartee car le mecanisme actuel s'est revele deja quasi-optimal empiriquement/algebriquement
+ pour ce fichier -- le vrai gain de performance necessiterait de corriger
+ <code>TextShapeRun::positionForOffset</code> / <code>offsetForPosition</code>, hors perimetre de ce
+ correctif (voir Nature). Nouvelle limite <code>EngineLimits::maxColumnBalancingIterations</code> :
+ <code>MultiColumnFlowBox::layoutContents()</code> arrete le raffinement du balancing une fois ce nombre
+ de passes de relayout supplementaires atteint sans convergence -- les colonnes peuvent alors etre
+ legerement moins parfaitement equilibrees qu'une recherche non bornee, mais le layout reste correct et
+ se termine.</p>""",
+ config="""Nouvelle limite <code>EngineLimits::maxColumnBalancingIterations</code>
+ (<code>setMaxColumnBalancingIterations</code> / <code>maxColumnBalancingIterations()</code>),
+ <strong>defaut 10</strong> (tres au-dessus des 1-2 iterations observees sur toutes les formes de contenu
+ testees, legitimes et adversariales), <code>0</code> = illimite (non recommande). API C
+ <code>plutobook_set_max_column_balancing_iterations(unsigned int)</code>. Verifie : (a) non-regression --
+ documents multicolonnes normaux (2 et 3 colonnes, <code>column-gap</code>, <code>column-span:all</code>)
+ rendus <strong>identiques au byte pres</strong> avant/apres (binaire pre-fix via <code>git stash</code> +
+ build separe) ; (b) le cap par defaut (10) produit un PDF <strong>identique au byte pres</strong> au cap
+ illimite (0) sur un contenu a spanners multiples, confirmant qu'il ne change rien pour du contenu reel ;
+ (c) un cap artificiellement bas (1, via un harnais C dedie appelant
+ <code>plutobook_set_max_column_balancing_iterations</code>) produit un PDF different (le mecanisme
+ s'arrete bien plus tot) mais toujours complet et valide -- tout le contenu est present (100/100 marqueurs
+ verifies des deux cotes), seul l'equilibrage des colonnes differe, confirmant que le cap fonctionne et
+ termine proprement sans perte de contenu. Mise en garde : ce correctif ne fait <strong>pas</strong>
+ converger le PoC litteral vers un temps lineaire -- la cause reelle est hors perimetre (voir Nature).""",
+ status="done",
 )
 
 # ---------------------------------------------------------------------------

@@ -1108,6 +1108,54 @@ public:
      */
     uint32_t maxTableNestingDepth() const { return m_maxTableNestingDepth; }
 
+    /**
+     * @brief Sets the maximum number of extra relayout passes multicolumn column-height balancing
+     * is allowed to perform.
+     *
+     * An auto-height multicolumn box (`columns: N` with no explicit height) determines its column
+     * height by iterating: lay out the whole flow, see how many columns that height would need, and
+     * if it is more than `N`, grow the height and lay out the whole flow again --
+     * `MultiColumnFlowBox::layoutContents()`'s `while(changed) { ...; changed = layoutColumns(true); }`
+     * loop, each iteration a full `BlockFlowBox::layoutContents()` of every box in the flow. The
+     * initial guess (`distributeImplicitBreaks()` / `calculateColumnHeight(false)`) is the exact
+     * ideal average height (`totalHeight / columnCount`) whenever the content has no explicit
+     * `break-before/after: column`, and is still close whenever it does (bounded by `columnCount`,
+     * itself capped by `maxColumnCount` -- see V12), so in every construction measured -- large plain
+     * paragraphs, hundreds of blocks of varying/randomized heights, many `column-span: all` spanners
+     * -- this loop converges in one or two iterations regardless of content size, and each later
+     * iteration's relayout is itself cheap (`LineLayout::layout()` only re-aligns existing lines
+     * vertically instead of re-running line breaking once a box has already been laid out once).
+     * Nothing in the loop's exit condition, however, actually bounds the iteration count: it is
+     * driven entirely by how much `m_minSpaceShortage` (the smallest overflow seen this pass) grows
+     * the guess each time, so a pathological combination of content and box-height rounding that
+     * defeats the exact initial guess could in principle need many corrections, each a full relayout.
+     * This limit forecloses that case outright rather than relying on it never being hit in practice.
+     *
+     * Once this many extra relayout passes have run without the row's column height having converged,
+     * balancing stops where it is: the columns may be very slightly less evenly filled than an
+     * unbounded search would have produced, but layout is otherwise correct and terminates.
+     *
+     * Note: measurements while diagnosing this limit also showed that a large single multicolumn
+     * paragraph is slow chiefly because `BlockFlowBox::layoutContents()`'s underlying line-breaking
+     * cost is itself superlinear in content size -- reproducible identically with plain (non-column)
+     * text -- which this limit does not address, since that cost is intrinsic to a single pass and is
+     * unrelated to column balancing or this file.
+     *
+     * If not set, the default is 10, comfortably above the one-or-two iterations observed for every
+     * legitimate and adversarial-shaped content tried. Passing `0` disables the limit -- not
+     * recommended for untrusted input.
+     *
+     * @param max The maximum accepted number of extra balancing relayout passes, or `0` for no limit.
+     */
+    void setMaxColumnBalancingIterations(uint32_t max) { m_maxColumnBalancingIterations = max; }
+
+    /**
+     * @brief Returns the maximum number of extra relayout passes multicolumn column-height balancing
+     * is allowed to perform.
+     * @return The configured iteration cap. See `setMaxColumnBalancingIterations()`.
+     */
+    uint32_t maxColumnBalancingIterations() const { return m_maxColumnBalancingIterations; }
+
 private:
     EngineLimits();
 
@@ -1120,6 +1168,7 @@ private:
     uint32_t m_maxColumnCount = 1000;
     uint32_t m_maxTextNodeLength = 100000000;
     uint32_t m_maxTableNestingDepth = 8;
+    uint32_t m_maxColumnBalancingIterations = 10;
 
     friend EngineLimits* engineLimits();
 };

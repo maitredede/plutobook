@@ -8,6 +8,7 @@
 
 #include "multicolumnbox.h"
 #include "borderpainter.h"
+#include "plutobook.hpp"
 
 #include <cmath>
 
@@ -535,7 +536,8 @@ void MultiColumnFlowBox::layoutContents(FragmentBuilder* fragmentainer)
     }
 
     auto changed = layoutColumns(false);
-    while(changed) {
+    auto maxIterations = engineLimits()->maxColumnBalancingIterations();
+    for(uint32_t iteration = 0; changed && (maxIterations == 0 || iteration < maxIterations); ++iteration) {
         setHeight(borderAndPaddingTop());
         changed = layoutColumns(true);
     }

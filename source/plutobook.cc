@@ -548,6 +548,11 @@ void plutobook_set_max_table_nesting_depth(unsigned int max)
     plutobook::engineLimits()->setMaxTableNestingDepth(max);
 }
 
+void plutobook_set_max_column_balancing_iterations(unsigned int max)
+{
+    plutobook::engineLimits()->setMaxColumnBalancingIterations(max);
+}
+
 struct _plutobook final : public plutobook::Book, public plutobook::ResourceFetcher {
     _plutobook(plutobook_page_size_t size, plutobook_page_margins_t margins, plutobook_media_type_t media);
     plutobook::ResourceData fetchUrl(const std::string& url) final;

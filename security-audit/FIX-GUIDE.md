@@ -119,6 +119,8 @@ foyer partagé pour V06-V12 : **réutiliser cette classe verbatim**, ne pas cré
 | nombre de pages max | 100 000 | V09 | `maxPageCount` — **fait** |
 | longueur max de représentation de compteur | 100 000 | V10 | `maxCounterLength` — **fait** |
 | longueur max accumulée d'un nœud texte | 100 000 000 caractères | V19 | `maxTextNodeLength` — **fait** (défense en profondeur ; le correctif principal est l'accumulation linéaire dans `TextNode::appendData`) |
+| profondeur d'imbrication réelle des tables | 8 | V20 | `maxTableNestingDepth` — **fait** |
+| itérations de balancing multicolonne (relayouts supplémentaires) | 10 | V21 | `maxColumnBalancingIterations` — **fait** (garde-fou ; la boucle converge déjà en 1-2 itérations en pratique, voir V21) |
 
 Toujours : **défaut qui ne casse pas le rendu légitime**, exposé C++ et C, documenté.
 
