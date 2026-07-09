@@ -810,6 +810,141 @@ add(
  status="done",
 )
 
+# --- Problemes de suivi (decouverts pendant les correctifs V01-V16) ---
+
+add(
+ id="V17", slug="V17-heapstring-memcpy-null", severity="basse", cat="UB / robustesse",
+ title="memcpy sur pointeur null pour une chaine vide",
+ keyfile="source/heapstring.h:72",
+ locations=[
+   ("source/heapstring.h:72", "Heap::createString: memcpy(dst, sv.data(), sv.size()) avec data() null"),
+ ],
+ nature="""<p><code>Heap::createString</code> transmet <code>string_view::data()</code> a
+ <code>memcpy</code>. Pour un <code>std::string_view</code> vide construit par defaut, <code>data()</code>
+ vaut <code>nullptr</code> et <code>memcpy(dst, nullptr, 0)</code> est un comportement <em>indefini</em>
+ (meme avec une taille nulle). Atteignable via un echappement CSS <code>content</code> produisant une
+ chaine vide en fin d'entree (ex. <code>content:"\\</code> suivi de EOF).</p>""",
+ risk="<p><strong>Impact</strong> : UB (signale par UBSan), en pratique benin. Faible severite.</p>",
+ repro=["Generer poc/make-poc.py (CSS content finissant par un backslash juste avant EOF), rendre sous UBSan -> runtime error: null pointer passed to memcpy."],
+ poc={
+  "make-poc.py": r'''#!/usr/bin/env python3
+# Ecrit un HTML dont la chaine CSS `content` se termine par un backslash juste avant EOF.
+# L'echappement en fin d'entree produit un string_view vide (data()==nullptr) transmis a
+# memcpy dans Heap::createString (UB, detecte par UBSan).
+open("repro.html", "wb").write(b'<!DOCTYPE html><html><body><style>p::before{content:"\\')
+print("repro.html ecrit (se termine par un backslash + EOF)")
+''',
+ },
+ fix="<p>Ne appeler <code>memcpy</code> que si <code>size &gt; 0</code> (et/ou data non null).</p>",
+ config="Correctif de robustesse (pas de knob).",
+)
+
+add(
+ id="V18", slug="V18-cairo-pagecount-default", severity="moyenne", cat="Integrite de sortie",
+ title="Defaut maxPageCount au-dela de la limite du writer PDF Cairo",
+ keyfile="include/plutobook.hpp (EngineLimits::maxPageCount)",
+ locations=[
+   ("include/plutobook.hpp", "EngineLimits::m_maxPageCount = 100000 (V09)"),
+   ("subprojects/cairo (1.18.4)", "writer PDF: xref/trailer corrompu au-dela de ~65536 pages"),
+ ],
+ nature="""<p>Le writer PDF de Cairo 1.18.4 corrompt la table xref / le trailer au-dela d'environ
+ 65536 pages dans un meme document (bug Cairo, sans crash). Le defaut <code>maxPageCount = 100000</code>
+ introduit en V09 depasse ce seuil : un document atteignant le plafond produit un PDF corrompu (mais
+ inoffensif).</p>""",
+ risk="<p><strong>Impact</strong> : integrite de sortie (PDF illisible). Pas de crash/OOM.</p>",
+ repro=["Rendre en PDF un document depassant 65536 pages avec le defaut &rarr; PDF invalide (pdfinfo/poppler)."],
+ poc={
+  "note.md": "Voir V09 (poc/repro.html height:1e9px). Verifier via pdfinfo que le PDF au plafond est valide apres correctif.\n",
+ },
+ fix="<p>Abaisser le defaut <code>maxPageCount</code> a une valeur garantissant un PDF Cairo valide (&le;65536).</p>",
+ config="Defaut <code>maxPageCount</code> abaisse (ex. 65535), toujours configurable via <code>EngineLimits</code>.",
+)
+
+add(
+ id="V19", slug="V19-concatenatestring-quadratic", severity="haute", cat="Deni de service (memoire)",
+ title="Heap::concatenateString O(n²) sur accumulation de texte",
+ keyfile="source/heapstring.h",
+ locations=[
+   ("source/heapstring.h", "Heap::concatenateString: recopie toute la chaine a chaque appel"),
+   ("source/document.cpp", "TextNode::appendData appelle concatenateString par callback character-data"),
+ ],
+ nature="""<p><code>TextNode::appendData</code> recopie l'integralite de la chaine accumulee a chaque
+ callback character-data, dans l'arene PMR monotone (jamais liberee). Croissance O(n&sup2;) en temps et
+ en memoire. Une bombe d'entites XML profonde (ou un gros noeud texte fragmente) provoque un
+ <code>std::bad_alloc</code> <em>avant</em> meme que la protection amplification d'expat (V16) ne se
+ declenche.</p>""",
+ risk="<p><strong>Impact</strong> : epuisement memoire (DoS) depuis un petit document XML.</p>",
+ repro=["Generer poc/make-entity-bomb.py (entites profondes) &rarr; rendre &rarr; bad_alloc pre-fix, borne post-fix."],
+ poc={
+  "make-entity-bomb.py": """#!/usr/bin/env python3
+# Bombe d'entites XML plus profonde que lol.xml (amplification de texte via appendData).
+L = ['<?xml version="1.0"?>', '<!DOCTYPE d [', '  <!ENTITY a0 "aaaaaaaaaa">']
+for i in range(1, 9):
+    ref = "&a%d;" % (i - 1)
+    L.append('  <!ENTITY a%d "%s">' % (i, ref * 10))
+L.append(']>')
+L.append('<d>&a8;</d>')
+open("entity-bomb.xml", "w").write("\\n".join(L))
+print("entity-bomb.xml ecrit (entites imbriquees a8 -> 10^8 'a')")
+""",
+ },
+ fix="""<p>Eviter la recopie O(n&sup2;) (accumulation efficace du texte) et/ou plafonner la longueur
+ accumulee d'un noeud texte (defaut sain, configurable).</p>""",
+ config="Longueur de texte accumulee bornee (defaut sain, configurable) et/ou accumulation non quadratique.",
+)
+
+add(
+ id="V20", slug="V20-nested-table-layout", severity="haute", cat="Deni de service (CPU)",
+ title="Layout de tables imbriquees a cout exponentiel",
+ keyfile="source/layout/tablebox.cpp",
+ locations=[
+   ("source/layout/tablebox.cpp", "calcul de largeur intrinseque/preferee recalcule par niveau"),
+ ],
+ nature="""<p>Le calcul des largeurs intrinseques/preferees des tables recalcule le sous-arbre a chaque
+ niveau ; pour des tables reellement imbriquees au-dela de ~80-100 niveaux le cout devient exponentiel
+ (independant du cap de profondeur d'imbrication de V08, fixe a 512).</p>""",
+ risk="<p><strong>Impact</strong> : hang CPU (DoS) sous le cap de profondeur.</p>",
+ repro=["Generer poc/make-nested-tables.py (~150 niveaux) &rarr; rendre &rarr; hang pre-fix, borne post-fix."],
+ poc={
+  "make-nested-tables.py": """#!/usr/bin/env python3
+# Tables reellement imbriquees pour exercer le calcul de largeur intrinseque.
+N = 150
+open("nested-tables.html","w").write(
+  "<!DOCTYPE html><html><body>" + "<table><tr><td>"*N + "x" + "</td></tr></table>"*N + "</body></html>")
+print(f"nested-tables.html ecrit: {N} niveaux")
+""",
+ },
+ fix="""<p>Memoiser le calcul de largeur, ou borner specifiquement la profondeur d'imbrication de tables
+ (plus basse que le cap general), configurable.</p>""",
+ config="Memoisation, et/ou profondeur d'imbrication de tables bornee (defaut sain, configurable).",
+)
+
+add(
+ id="V21", slug="V21-multicolumn-balancing", severity="moyenne", cat="Deni de service (CPU)",
+ title="Balancing multicolonne superlineaire en taille de contenu",
+ keyfile="source/layout/multicolumnbox.cpp",
+ locations=[
+   ("source/layout/multicolumnbox.cpp", "algorithme de balancing (relayout repete)"),
+ ],
+ nature="""<p>L'equilibrage des colonnes est superlineaire en taille de contenu, meme a
+ <code>column-count</code> legitime : un gros contenu multicolonne prend des dizaines de secondes.
+ Distinct de V12 (qui borne le <em>nombre</em> de colonnes) : ici c'est le cout du balancing.</p>""",
+ risk="<p><strong>Impact</strong> : hang/lenteur CPU (DoS) a partir d'un contenu multicolonne volumineux.</p>",
+ repro=["Generer poc/make-multicol.py (gros contenu, columns:3) &rarr; rendre &rarr; lent pre-fix, borne post-fix."],
+ poc={
+  "make-multicol.py": """#!/usr/bin/env python3
+# Gros contenu multicolonne pour exercer le balancing.
+words = ("mot " * 20000).strip()
+open("multicol.html","w").write(
+  "<!DOCTYPE html><html><head><style>div{columns:3}</style></head><body><div>"+words+"</div></body></html>")
+print("multicol.html ecrit")
+""",
+ },
+ fix="""<p>Borner le nombre d'iterations de balancing (ou ameliorer l'algorithme), configurable, sans
+ casser l'equilibrage des documents normaux.</p>""",
+ config="Nombre d'iterations de balancing borne (defaut sain, configurable).",
+)
+
 # ---------------------------------------------------------------------------
 # Rendu HTML
 # ---------------------------------------------------------------------------
@@ -872,8 +1007,10 @@ Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).<
 """
 
 # --- Root index ---
+# Tableau trie par criticite (rang defini par l'ordre de SEV), puis par id.
+_sevrank = {k: i for i, k in enumerate(SEV)}
 rows = ""
-for f in F:
+for f in sorted(F, key=lambda x: (_sevrank[x["severity"]], x["id"])):
     label, cls = SEV[f["severity"]]
     rows += f"""<tr>
 <td><a href="{f['slug']}/">{f['id']}</a></td>
@@ -967,6 +1104,7 @@ for f in F:
 <p>{f['config']}</p>
 """
     d = ROOT / f["slug"]
+    d.mkdir(parents=True, exist_ok=True)
     (d / "index.html").write_text(page(f"{f['id']} - {f['title']}", body, css_path="../assets/style.css"))
     pdir = d / "poc"; pdir.mkdir(parents=True, exist_ok=True)
     for fn, content in f["poc"].items():

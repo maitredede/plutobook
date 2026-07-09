@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V17 - memcpy sur pointeur null pour une chaine vide</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; Tous les problemes</a></div>
+<h1>V17 &middot; memcpy sur pointeur null pour une chaine vide</h1>
+<p><span class="badge sev-low">Basse</span> &nbsp; <span class="muted">UB / robustesse</span></p>
+<div class="card">
+<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Fichier cle</b> <code>source/heapstring.h:72</code></div>
+</div>
+
+<h2>Nature</h2>
+<p><code>Heap::createString</code> transmet <code>string_view::data()</code> a
+ <code>memcpy</code>. Pour un <code>std::string_view</code> vide construit par defaut, <code>data()</code>
+ vaut <code>nullptr</code> et <code>memcpy(dst, nullptr, 0)</code> est un comportement <em>indefini</em>
+ (meme avec une taille nulle). Atteignable via un echappement CSS <code>content</code> produisant une
+ chaine vide en fin d'entree (ex. <code>content:"\</code> suivi de EOF).</p>
+
+<h2>Localisation</h2>
+<ul><li><code>source/heapstring.h:72</code> &mdash; Heap::createString: memcpy(dst, sv.data(), sv.size()) avec data() null</li></ul>
+
+<h2>Risque &amp; impact</h2>
+<p><strong>Impact</strong> : UB (signale par UBSan), en pratique benin. Faible severite.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Generer poc/make-poc.py (CSS content finissant par un backslash juste avant EOF), rendre sous UBSan -> runtime error: null pointer passed to memcpy.</li></ol>
+<p class="muted">Fichiers d'exemple :</p>
+<ul><li><code>poc/make-poc.py</code></li></ul>
+
+<h2>Correctif propose</h2>
+<p>Ne appeler <code>memcpy</code> que si <code>size &gt; 0</code> (et/ou data non null).</p>
+
+<h2>Configuration (defaut + configurable)</h2>
+<p>Correctif de robustesse (pas de knob).</p>
+
+<footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
+Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>
+</div></body></html>

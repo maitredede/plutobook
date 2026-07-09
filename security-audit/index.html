@@ -12,9 +12,9 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 </head><body><div class="wrap">
 <button class="toggle" id="tg">theme</button>
 <h1>PlutoBook &mdash; Rapport d'audit de securite</h1>
-<p class="lead">Audit red-team du moteur de rendu HTML/XML/CSS/SVG &rarr; PDF. 16 problemes,
+<p class="lead">Audit red-team du moteur de rendu HTML/XML/CSS/SVG &rarr; PDF. 21 problemes,
 classes par criticite.</p>
-<p><span class="badge sev-crit">2 Critique</span> &middot; <span class="badge sev-high">6 Haute</span> &middot; <span class="badge sev-medhigh">2 Moyenne+</span> &middot; <span class="badge sev-med">2 Moyenne</span> &middot; <span class="badge sev-low">3 Basse</span> &middot; <span class="badge sev-info">1 Info</span></p>
+<p><span class="badge sev-crit">2 Critique</span> &middot; <span class="badge sev-high">8 Haute</span> &middot; <span class="badge sev-medhigh">2 Moyenne+</span> &middot; <span class="badge sev-med">4 Moyenne</span> &middot; <span class="badge sev-low">4 Basse</span> &middot; <span class="badge sev-info">1 Info</span></p>
 
 <div class="card">
 <h3 style="margin-top:0">Resume executif</h3>
@@ -97,6 +97,22 @@ est non recuperable.</p>
 <td><span class="status-done">corrige</span> (<code>583dfcf</code>)</td>
 </tr>
 <tr>
+<td><a href="V19-concatenatestring-quadratic/">V19</a></td>
+<td><a href="V19-concatenatestring-quadratic/">Heap::concatenateString O(n²) sur accumulation de texte</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Deni de service (memoire)</td>
+<td><code>source/heapstring.h</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V20-nested-table-layout/">V20</a></td>
+<td><a href="V20-nested-table-layout/">Layout de tables imbriquees a cout exponentiel</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Deni de service (CPU)</td>
+<td><code>source/layout/tablebox.cpp</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
 <td><a href="V09-page-count/">V09</a></td>
 <td><a href="V09-page-count/">Nombre de pages proportionnel a la hauteur + UB float&rarr;uint</a></td>
 <td><span class="badge sev-medhigh">Moyenne+</span></td>
@@ -129,6 +145,22 @@ est non recuperable.</p>
 <td><span class="status-done">corrige</span> (<code>9821b38</code>)</td>
 </tr>
 <tr>
+<td><a href="V18-cairo-pagecount-default/">V18</a></td>
+<td><a href="V18-cairo-pagecount-default/">Defaut maxPageCount au-dela de la limite du writer PDF Cairo</a></td>
+<td><span class="badge sev-med">Moyenne</span></td>
+<td>Integrite de sortie</td>
+<td><code>include/plutobook.hpp (EngineLimits::maxPageCount)</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
+<td><a href="V21-multicolumn-balancing/">V21</a></td>
+<td><a href="V21-multicolumn-balancing/">Balancing multicolonne superlineaire en taille de contenu</a></td>
+<td><span class="badge sev-med">Moyenne</span></td>
+<td>Deni de service (CPU)</td>
+<td><code>source/layout/multicolumnbox.cpp</code></td>
+<td><span class="status-todo">a corriger</span></td>
+</tr>
+<tr>
 <td><a href="V13-integer-ub/">V13</a></td>
 <td><a href="V13-integer-ub/">Overflow entier dans le parsing numerique</a></td>
 <td><span class="badge sev-low">Basse</span></td>
@@ -151,6 +183,14 @@ est non recuperable.</p>
 <td>Robustesse (latent)</td>
 <td><code>source/csstokenizer.h:239-286</code></td>
 <td><span class="status-done">corrige</span> (<code>086414c</code>)</td>
+</tr>
+<tr>
+<td><a href="V17-heapstring-memcpy-null/">V17</a></td>
+<td><a href="V17-heapstring-memcpy-null/">memcpy sur pointeur null pour une chaine vide</a></td>
+<td><span class="badge sev-low">Basse</span></td>
+<td>UB / robustesse</td>
+<td><code>source/heapstring.h:72</code></td>
+<td><span class="status-todo">a corriger</span></td>
 </tr>
 <tr>
 <td><a href="V16-expat-billion-laughs/">V16</a></td>
