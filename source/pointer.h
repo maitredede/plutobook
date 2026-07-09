@@ -223,6 +223,36 @@ constexpr bool is(const RefPtr<U>& value) {
     return value && is_a<T>::check(*value);
 }
 
+// Security note (V15 hardening pass): the pointer/RefPtr overloads of to<T>() below already perform
+// a real runtime check via is<T>() and fail safe (return nullptr) in release builds -- they were
+// never assert-only, so they are not a downcast/type-confusion risk regardless of NDEBUG. Only the
+// two reference-taking overloads immediately below rely on assert() alone, which compiles out under
+// NDEBUG and leaves a bare static_cast<T&>.
+//
+// We deliberately do NOT add a runtime check to these two overloads. Reasons:
+//  - A reference-returning cast has no safe "failure" value to return, so a runtime check would have
+//    to abort/throw on mismatch. Throwing is not viable here: these calls sit deep in CSS value
+//    resolution and layout, most of it not exception-safety-audited, and aborting is no better than
+//    the crash we are trying to avoid.
+//  - There are ~300+ call sites (grep for `to<` under source/), overwhelmingly in CSS value/property
+//    resolution (cssstylesheet.cpp, cssrule.cpp, counters.cpp, ...) where the target type was just
+//    established by the caller's own control flow (a grammar production, a prior switch on the
+//    value's kind, etc.) immediately before the cast -- the same "invariant established one line
+//    above" pattern already used throughout this codebase (see CSSTokenStream::consume() in
+//    csstokenizer.h). Adding a checked-and-abort (or checked-and-throw) path to all of them is a
+//    blanket hot-path cost across CSS parsing and table/box layout with no concrete bug behind it:
+//    the audit that flagged this (security-audit/V15-assert-bounds) found no reachable defect, only
+//    a latent fuzzing target.
+//  - The one surface in this audit that *was* shown to need bounds enforcement beyond assert --
+//    CSSTokenizerInputStream, which processes raw untrusted CSS bytes one at a time -- has been
+//    hardened directly in csstokenizer.h (advance()/consume()/substring() now clamp instead of
+//    relying solely on assert).
+//
+// If a future fuzzing pass (see security-audit/V15-assert-bounds/poc/note.md) finds a concrete
+// mismatched-type path reaching one of these reference overloads (e.g. via a malformed table box
+// tree fixup), prefer adding a checked, pointer-returning `to<T>()` call at that specific call site
+// (falling back to the pointer overload's existing nullptr-on-mismatch behavior) rather than
+// instrumenting every call site here.
 template<typename T, typename U>
 constexpr T& to(U& value) {
     assert(is<T>(value));

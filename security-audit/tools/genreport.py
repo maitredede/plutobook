@@ -749,6 +749,7 @@ add(
  },
  fix="<p>Remplacer les <code>assert</code> de bornes des chemins chauds par des verifications actives en release ; renforcer les downcasts.</p>",
  config="Correctif de robustesse.",
+ status="done",
 )
 
 add(

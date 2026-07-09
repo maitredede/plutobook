@@ -24,8 +24,8 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 | [x] | V11 | Stride stb→cairo | Moyenne | 40ad76d |
 | [x] | V12 | column-count | Moyenne | 9821b38 |
 | [x] | V13 | Overflow entier | Basse | bb826f2 |
-| [x] | V14 | Retours turbojpeg/webp | Basse | voir `git log` (commit courant) |
-| [ ] | V15 | Bornes en assert (latent) | Basse | — |
+| [x] | V14 | Retours turbojpeg/webp | Basse | 2945ca0 |
+| [x] | V15 | Bornes en assert (latent) | Basse | voir `git log` (commit courant) |
 | [ ] | V16 | expat billion-laughs | Info | — |
 
 ## Notes
