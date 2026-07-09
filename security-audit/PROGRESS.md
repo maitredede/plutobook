@@ -23,8 +23,8 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 | [x] | V10 | @counter-style pad / additive | Moyenne+ | 37c94d1 |
 | [x] | V11 | Stride stb→cairo | Moyenne | 40ad76d |
 | [x] | V12 | column-count | Moyenne | 9821b38 |
-| [x] | V13 | Overflow entier | Basse | voir `git log` |
-| [ ] | V14 | Retours turbojpeg/webp | Basse | — |
+| [x] | V13 | Overflow entier | Basse | bb826f2 |
+| [x] | V14 | Retours turbojpeg/webp | Basse | voir `git log` (commit courant) |
 | [ ] | V15 | Bornes en assert (latent) | Basse | — |
 | [ ] | V16 | expat billion-laughs | Info | — |
 

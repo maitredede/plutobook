@@ -729,6 +729,7 @@ add(
  },
  fix="<p>Verifier tous les retours de decodeur et le <code>malloc</code> avant usage.</p>",
  config="Correctif de robustesse.",
+ status="done",
 )
 
 add(

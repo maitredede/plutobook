@@ -164,10 +164,22 @@ static cairo_surface_t* decodeBitmapImage(const char* data, size_t size)
         auto surfaceWidth = cairo_image_surface_get_width(surface);
         auto surfaceStride = cairo_image_surface_get_stride(surface);
         auto surfaceHeight = cairo_image_surface_get_height(surface);
-        tjDecompress2(tj, (uint8_t*)(data), size, surfaceData, surfaceWidth, surfaceStride, surfaceHeight, TJPF_BGRX, 0);
+        if(tjDecompress2(tj, (uint8_t*)(data), size, surfaceData, surfaceWidth, surfaceStride, surfaceHeight, TJPF_BGRX, 0) == -1) {
+            plutobook_set_error_message("image decode error: %s", tjGetErrorStr());
+            tjDestroy(tj);
+            cairo_surface_destroy(surface);
+            return nullptr;
+        }
+
         tjDestroy(tj);
 
         auto mimeData = (uint8_t*)std::malloc(size);
+        if(mimeData == nullptr) {
+            plutobook_set_error_message("image decode error: out of memory allocating %zu bytes for JPEG mime data", size);
+            cairo_surface_destroy(surface);
+            return nullptr;
+        }
+
         std::memcpy(mimeData, data, size);
 
         cairo_surface_mark_dirty(surface);
@@ -206,6 +218,7 @@ static cairo_surface_t* decodeBitmapImage(const char* data, size_t size)
         config.output.is_external_memory = 1;
         if(WebPDecode((const uint8_t*)(data), size, &config) != VP8_STATUS_OK) {
             plutobook_set_error_message("image decode error: WebPDecode failed");
+            cairo_surface_destroy(surface);
             return nullptr;
         }
 
