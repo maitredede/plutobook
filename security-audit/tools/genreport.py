@@ -858,7 +858,10 @@ add(
   "note.md": "Voir V09 (poc/repro.html height:1e9px). Verifier via pdfinfo que le PDF au plafond est valide apres correctif.\n",
  },
  fix="<p>Abaisser le defaut <code>maxPageCount</code> a une valeur garantissant un PDF Cairo valide (&le;65536).</p>",
- config="Defaut <code>maxPageCount</code> abaisse (ex. 65535), toujours configurable via <code>EngineLimits</code>.",
+ config="""Defaut <code>maxPageCount</code> abaisse a <b>65533</b> (verifie empiriquement par bisection :
+ 65533 pages -> PDF valide, 65534 -> PDF corrompu, reproductible sur plusieurs formes de document),
+ toujours configurable via <code>EngineLimits</code>.""",
+ status="done",
 )
 
 add(
