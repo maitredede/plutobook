@@ -710,6 +710,7 @@ add(
  },
  fix="<p>Accumulation verifiee + clamp de plage.</p>",
  config="Correctif de robustesse (pas de knob dedie).",
+ status="done",
 )
 
 add(
