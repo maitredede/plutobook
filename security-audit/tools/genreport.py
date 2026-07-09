@@ -669,8 +669,24 @@ add(
 </style></head><body><div>a b c d e</div></body></html>
 """,
  },
- fix="<p>Cap <code>column-count</code>.</p>",
- config="Configurable max column count (sane default).",
+ fix="""<p><code>BoxStyle::columnCount()</code> (the single point that converts the parsed CSS
+ <code>column-count</code> value into the int used by multicolumn layout, called from
+ <code>MultiColumnFlowBox::computeWidth</code> and <code>computePreferredWidths</code>) clamps the
+ parsed value to <code>EngineLimits::maxColumnCount()</code> before returning it, instead of leaving
+ it as-is (potentially ~2 billion). The minimum of 1 already guaranteed by
+ <code>consumePositiveInteger</code> (shared with <code>widows</code>/<code>orphans</code>, so left
+ untouched) is unchanged. The <code>O(runs)</code> loop in
+ <code>MultiColumnRowBox::distributeImplicitBreaks</code> can then no longer exceed this iteration
+ cap.</p>""",
+ config="""New <code>EngineLimits::maxColumnCount</code> limit (<code>setMaxColumnCount</code> /
+ <code>maxColumnCount()</code>), <strong>default 1000</strong>, <code>0</code> = unlimited (not
+ recommended). C API <code>plutobook_set_max_column_count(unsigned int)</code>. Verified:
+ <code>columns:2000000000</code> goes from a hang (&gt;8s, killed by timeout, no valid PDF) to
+ rendering in ~0.05s (valid PDF) once the cap is applied; <code>columns:3</code> over a text block
+ still produces a correct 3-column render (non-regression); a lowered cap via a test harness (C API,
+ e.g. maxColumnCount=1/5) reduces the number of columns actually used accordingly, measured
+ indirectly via the page count produced for the same content.""",
+ status="done",
 )
 
 add(

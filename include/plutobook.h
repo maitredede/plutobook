@@ -813,6 +813,24 @@ PLUTOBOOK_API void plutobook_set_max_page_count(unsigned int max);
 PLUTOBOOK_API void plutobook_set_max_counter_length(unsigned int max);
 
 /**
+ * @brief Sets the maximum value accepted for the `column-count` CSS property.
+ *
+ * Multicolumn layout distributes content across `column-count` columns by repeatedly walking the
+ * row's existing column runs, an operation proportional to the number of columns already placed.
+ * Without a bound, a declaration such as `columns: 2000000000` forces that loop to run billions of
+ * times, hanging the CPU from a few bytes of CSS.
+ *
+ * Values above the configured maximum are clamped down to it (the existing minimum of 1 still
+ * applies below it).
+ *
+ * If not set, the default is 1000. Passing `0` disables the limit -- not recommended for untrusted
+ * input.
+ *
+ * @param max The maximum accepted `column-count` value, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_column_count(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {
