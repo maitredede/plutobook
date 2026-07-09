@@ -119,6 +119,7 @@ home for V06-V12: **reuse this class verbatim**, do not create a second mechanis
 | max `column-count` | 1000 | V12 | `maxColumnCount` — **done** |
 | max page count | 100,000 | V09 | `maxPageCount` — **done** |
 | max counter representation length | 100,000 | V10 | `maxCounterLength` — **done** |
+| max accumulated text-node length | 100,000,000 characters | V19 | `maxTextNodeLength` — **done** (defense in depth; the main fix is linear accumulation in `TextNode::appendData`) |
 
 Always: **a default that does not break legitimate rendering**, exposed in C++ and C, and
 documented.

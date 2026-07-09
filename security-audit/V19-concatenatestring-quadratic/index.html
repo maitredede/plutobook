@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V19 &middot; Heap::concatenateString O(n²) on text accumulation</h1>
 <p><span class="badge sev-high">High</span> &nbsp; <span class="muted">Denial of service (memory)</span></p>
 <div class="card">
-<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Status</b> <span class="status-done">fixed</span></div>
 <div class="kv"><b>Key file</b> <code>source/heapstring.h</code></div>
 </div>
 
@@ -42,7 +42,12 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
  length of a text node (sane default, configurable).</p>
 
 <h2>Configuration (default + configurable)</h2>
-<p>Bounded accumulated text length (sane default, configurable) and/or non-quadratic accumulation.</p>
+<p><code>TextNode::appendData</code> now accumulates fragments in a plain
+ <code>std::string</code> (geometric growth on the normal heap, freed on each reallocation),
+ materialized into the arena (<code>Heap::concatenateString</code>) only once, on first read
+ (<code>data()</code>) -- O(n) cost instead of O(n&sup2;), identical text. Defense in depth:
+ <code>EngineLimits::maxTextNodeLength</code> (default 100,000,000 characters, configurable,
+ 0 = unlimited) caps the accumulated length of a single text node.</p>
 
 <footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
 Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>

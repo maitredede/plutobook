@@ -898,7 +898,13 @@ print("entity-bomb.xml written (nested entities a8 -> 10^8 'a')")
  },
  fix="""<p>Avoid the O(n&sup2;) recopy (efficient text accumulation) and/or cap the accumulated
  length of a text node (sane default, configurable).</p>""",
- config="Bounded accumulated text length (sane default, configurable) and/or non-quadratic accumulation.",
+ config="""<code>TextNode::appendData</code> now accumulates fragments in a plain
+ <code>std::string</code> (geometric growth on the normal heap, freed on each reallocation),
+ materialized into the arena (<code>Heap::concatenateString</code>) only once, on first read
+ (<code>data()</code>) -- O(n) cost instead of O(n&sup2;), identical text. Defense in depth:
+ <code>EngineLimits::maxTextNodeLength</code> (default 100,000,000 characters, configurable,
+ 0 = unlimited) caps the accumulated length of a single text node.""",
+ status="done",
 )
 
 add(

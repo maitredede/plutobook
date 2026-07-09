@@ -831,6 +831,25 @@ PLUTOBOOK_API void plutobook_set_max_counter_length(unsigned int max);
 PLUTOBOOK_API void plutobook_set_max_column_count(unsigned int max);
 
 /**
+ * @brief Sets the maximum length, in characters, a single text node is allowed to accumulate.
+ *
+ * Character data can reach a text node through many small fragments (HTML tokenizer runs, XML entity
+ * expansion, ...). These are folded into the node's final string in amortized linear time; this limit
+ * is a complementary, defense-in-depth cap on top of that fix, bounding the worst-case memory a single
+ * text node can consume regardless of how many fragments a (potentially adversarial) input feeds into
+ * it -- e.g. a deep XML entity expansion whose output stays under expat's own amplification guard.
+ *
+ * Once a text node's accumulated length reaches this limit, further appended fragments are truncated
+ * instead of growing the node further.
+ *
+ * If not set, the default is 100000000 (100 million characters). Passing `0` disables the limit --
+ * not recommended for untrusted input.
+ *
+ * @param max The maximum accepted accumulated text-node length, in characters, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_text_node_length(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {

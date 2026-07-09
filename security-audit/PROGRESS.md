@@ -29,7 +29,7 @@ finding. One commit per finding (see `FIX-GUIDE.md`). **Push after every commit.
 | [x] | V16 | expat billion-laughs | Info | 371a78a |
 | [x] | V17 | memcpy on null `data()` (empty string) | Low | see git log |
 | [x] | V18 | maxPageCount default > Cairo PDF limit | Medium | see git log |
-| [ ] | V19 | `Heap::concatenateString` O(n²) | High | — |
+| [x] | V19 | `Heap::concatenateString` O(n²) | High | see git log |
 | [ ] | V20 | Exponential nested table layout | High | — |
 | [ ] | V21 | Superlinear multicolumn balancing | Medium | — |
 
@@ -46,10 +46,16 @@ while fixing, now tracked and to be handled in order: V17 → V18 → V19 → V2
   corrupted xref/trailer (Cairo bug, no crash; empirically verified by bisection: 65533 pages =
   valid PDF, 65534 = invalid, reproduced across several document shapes). The `maxPageCount=100000`
   default (V09) exceeded this threshold → default lowered to **65533**. (V09)
-- **V19** — `Heap::concatenateString` O(n²) (`source/heapstring.h`): `TextNode::appendData`
-  recopies the whole accumulated string on every character-data callback, onto the monotonic PMR
-  arena that's never freed → a deep XML entity bomb can trigger `std::bad_alloc` before expat's
-  protection kicks in. (V16)
+- **V19** — `Heap::concatenateString` O(n²) (`source/heapstring.h`): `TextNode::appendData` used
+  to recopy the whole accumulated string on every character-data callback, onto the monotonic PMR
+  arena that's never freed. Confirmed by binary bisection (stash/rebuild): under a 2-3 GiB
+  `ulimit -v`, the XML entity bomb (`poc/make-entity-bomb.py`) and even a **legitimate** ~2.1M
+  character document fragmented into ~200,000 callbacks (via repeated `&amp;`) both hit
+  `std::bad_alloc` before expat's protection (V16) kicks in. Fixed by accumulating fragments in a
+  plain `std::string` (normal heap, geometric growth, freed on each reallocation) and only
+  materializing into the arena once, on first read (`TextNode::data()`) — O(n) cost instead of
+  O(n²), identical text (verified byte-for-byte via `pdftotext`). Additional defense in depth:
+  `EngineLimits::maxTextNodeLength` (default 100,000,000 characters, configurable). (V16)
 - **V20** — Deeply nested table layout: exponential intrinsic-width computation cost beyond
   ~80-100 levels (independent of V08's depth cap). CPU DoS. (V08)
 - **V21** — Superlinear multicolumn balancing in content size, even at a legitimate
