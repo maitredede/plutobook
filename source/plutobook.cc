@@ -538,6 +538,11 @@ void plutobook_set_max_column_count(unsigned int max)
     plutobook::engineLimits()->setMaxColumnCount(max);
 }
 
+void plutobook_set_max_text_node_length(unsigned int max)
+{
+    plutobook::engineLimits()->setMaxTextNodeLength(max);
+}
+
 struct _plutobook final : public plutobook::Book, public plutobook::ResourceFetcher {
     _plutobook(plutobook_page_size_t size, plutobook_page_margins_t margins, plutobook_media_type_t media);
     plutobook::ResourceData fetchUrl(const std::string& url) final;

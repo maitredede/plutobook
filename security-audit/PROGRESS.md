@@ -29,7 +29,7 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`). **Pousser a
 | [x] | V16 | expat billion-laughs | Info | 371a78a |
 | [x] | V17 | memcpy sur `data()` null (chaîne vide) | Basse | voir git log |
 | [x] | V18 | Défaut maxPageCount > limite PDF Cairo | Moyenne | voir git log |
-| [ ] | V19 | `Heap::concatenateString` O(n²) | Haute | — |
+| [x] | V19 | `Heap::concatenateString` O(n²) | Haute | voir git log |
 | [ ] | V20 | Layout tables imbriquées exponentiel | Haute | — |
 | [ ] | V21 | Balancing multicolonne superlinéaire | Moyenne | — |
 
@@ -46,9 +46,16 @@ pendant les correctifs, désormais suivis et traités dans l'ordre : V17 → V18
   xref/trailer corrompu (bug Cairo, sans crash ; vérifié empiriquement par bisection : 65533 pages =
   PDF valide, 65534 = invalide, reproduit sur plusieurs formes de document). Le défaut
   `maxPageCount=100000` (V09) dépassait ce seuil → défaut abaissé à **65533**. (V09)
-- **V19** — `Heap::concatenateString` O(n²) (`source/heapstring.h`) : `TextNode::appendData` recopie
-  toute la chaîne accumulée à chaque callback character-data, sur l'arène PMR monotone jamais libérée
-  → une bombe d'entités XML profonde peut faire `std::bad_alloc` avant la protection expat. (V16)
+- **V19** — `Heap::concatenateString` O(n²) (`source/heapstring.h`) : `TextNode::appendData` recopiait
+  toute la chaîne accumulée à chaque callback character-data, sur l'arène PMR monotone jamais libérée.
+  Confirmé par bisection binaire (stash/rebuild) : sous `ulimit -v` de 2-3 Gio, la bombe d'entités XML
+  (`poc/make-entity-bomb.py`) et même un document **légitime** de ~2,1 M caractères fragmenté en
+  ~200 000 callbacks (via `&amp;` répétés) font `std::bad_alloc` avant que la protection expat (V16)
+  ne se déclenche. Corrigé en accumulant les fragments dans un `std::string` ordinaire (tas normal,
+  croissance géométrique, libéré à chaque réallocation) et en ne matérialisant dans l'arène qu'une
+  seule fois, à la première lecture (`TextNode::data()`) — coût O(n) au lieu de O(n²), texte
+  identique (vérifié octet pour octet via `pdftotext`). Défense en profondeur additionnelle :
+  `EngineLimits::maxTextNodeLength` (défaut 100 000 000 caractères, configurable). (V16)
 - **V20** — Layout de tables profondément imbriquées : coût exponentiel du calcul de largeur
   intrinsèque au-delà de ~80-100 niveaux (indépendant du cap de profondeur V08). DoS CPU. (V08)
 - **V21** — Balancing multicolonne superlinéaire en taille de contenu, même à `column-count`

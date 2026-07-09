@@ -84,8 +84,8 @@ public:
 
     bool isTextNode() const final { return true; }
 
-    const HeapString& data() const { return m_data; }
-    void setData(const HeapString& data) { m_data = data; }
+    const HeapString& data() const;
+    void setData(const HeapString& data);
     void appendData(std::string_view data);
 
     bool isHidden(const Box* parent) const;
@@ -95,7 +95,25 @@ public:
     void buildBox(Counters& counters, SelectorFilter& selectorFilter, Box* parent) final;
 
 private:
-    HeapString m_data;
+    void flushPendingData() const;
+
+    // Character data can reach a text node through many small fragments -- one HTML tokenizer run,
+    // one XML/expat character-data callback, one level of entity expansion, etc. Folding each
+    // fragment into m_data immediately via Heap::concatenateString() would recopy the *entire*
+    // accumulated string on every single fragment: O(n^2) time, and since the arena backing m_data is
+    // a monotonic_buffer_resource that never frees, O(n^2) memory too, with every intermediate copy
+    // left allocated (V19). Instead, incoming fragments are appended to m_pendingData, a plain
+    // std::string that grows geometrically on the ordinary heap (amortized O(1) per append, and old
+    // buffers ARE freed on reallocation), and folded into m_data with a single
+    // Heap::concatenateString() call the first time the materialized value is actually read
+    // (flushPendingData(), called from data()). This is safe because nothing reads a TextNode's data
+    // before parsing of the whole document has finished (Document::finishParsingDocument(), then
+    // Document::build()), so no further appendData() call can follow a flush. Net cost across the
+    // node's lifetime: O(n) time and O(n) arena memory for n accumulated characters, instead of
+    // O(n^2). m_data/m_pendingData are mutable so data() can stay const (a pure query that just
+    // happens to memoize its result).
+    mutable HeapString m_data;
+    mutable std::string m_pendingData;
 };
 
 template<>

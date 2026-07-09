@@ -894,7 +894,13 @@ print("entity-bomb.xml ecrit (entites imbriquees a8 -> 10^8 'a')")
  },
  fix="""<p>Eviter la recopie O(n&sup2;) (accumulation efficace du texte) et/ou plafonner la longueur
  accumulee d'un noeud texte (defaut sain, configurable).</p>""",
- config="Longueur de texte accumulee bornee (defaut sain, configurable) et/ou accumulation non quadratique.",
+ config="""<code>TextNode::appendData</code> accumule desormais les fragments dans un
+ <code>std::string</code> ordinaire (croissance geometrique sur le tas normal, libere a chaque
+ reallocation), materialise une seule fois dans l'arene (<code>Heap::concatenateString</code>) a la
+ premiere lecture (<code>data()</code>) -- cout O(n) au lieu de O(n&sup2;), texte identique. Defense en
+ profondeur : <code>EngineLimits::maxTextNodeLength</code> (defaut 100&nbsp;000&nbsp;000 caracteres,
+ configurable, 0 = illimite) plafonne la longueur accumulee d'un seul noeud texte.""",
+ status="done",
 )
 
 add(

@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V19 &middot; Heap::concatenateString O(n²) sur accumulation de texte</h1>
 <p><span class="badge sev-high">Haute</span> &nbsp; <span class="muted">Deni de service (memoire)</span></p>
 <div class="card">
-<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Statut</b> <span class="status-done">corrige</span></div>
 <div class="kv"><b>Fichier cle</b> <code>source/heapstring.h</code></div>
 </div>
 
@@ -42,7 +42,12 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
  accumulee d'un noeud texte (defaut sain, configurable).</p>
 
 <h2>Configuration (defaut + configurable)</h2>
-<p>Longueur de texte accumulee bornee (defaut sain, configurable) et/ou accumulation non quadratique.</p>
+<p><code>TextNode::appendData</code> accumule desormais les fragments dans un
+ <code>std::string</code> ordinaire (croissance geometrique sur le tas normal, libere a chaque
+ reallocation), materialise une seule fois dans l'arene (<code>Heap::concatenateString</code>) a la
+ premiere lecture (<code>data()</code>) -- cout O(n) au lieu de O(n&sup2;), texte identique. Defense en
+ profondeur : <code>EngineLimits::maxTextNodeLength</code> (defaut 100&nbsp;000&nbsp;000 caracteres,
+ configurable, 0 = illimite) plafonne la longueur accumulee d'un seul noeud texte.</p>
 
 <footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
 Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>

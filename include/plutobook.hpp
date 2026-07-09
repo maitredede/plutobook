@@ -1031,6 +1031,38 @@ public:
      */
     uint32_t maxColumnCount() const { return m_maxColumnCount; }
 
+    /**
+     * @brief Sets the maximum length, in characters, a single text node is allowed to accumulate.
+     *
+     * Character data can reach a text node through many small fragments (HTML tokenizer runs,
+     * XML/expat character-data callbacks, entity expansion, ...). Each fragment is folded into the
+     * node's final string in amortized linear time (`TextNode::appendData()` buffers fragments in a
+     * plain, geometrically-growing `std::string` and materializes the final value with a single
+     * `Heap::concatenateString()` call on first read, instead of recopying the whole accumulated
+     * string into the arena on every fragment -- see V19). This limit is a complementary,
+     * defense-in-depth bound on top of that fix: it does not change the linear-time behavior of
+     * legitimate documents, but caps the worst-case memory a single text node can consume regardless
+     * of how many fragments a (potentially adversarial) input feeds into it -- e.g. a deep XML entity
+     * expansion whose output stays under expat's own amplification guard.
+     *
+     * Once a text node's accumulated length reaches this limit, further appended fragments are
+     * truncated (or dropped entirely, once the limit is already reached) instead of growing the node
+     * further.
+     *
+     * If not set, the default is 100000000 (100 million characters), far above any single text node
+     * produced by a legitimate document. Passing `0` disables the limit -- not recommended for
+     * untrusted input.
+     *
+     * @param max The maximum accepted accumulated text-node length, in characters, or `0` for no limit.
+     */
+    void setMaxTextNodeLength(uint32_t max) { m_maxTextNodeLength = max; }
+
+    /**
+     * @brief Returns the maximum length a single text node is allowed to accumulate.
+     * @return The configured length cap. See `setMaxTextNodeLength()`.
+     */
+    uint32_t maxTextNodeLength() const { return m_maxTextNodeLength; }
+
 private:
     EngineLimits();
 
@@ -1041,6 +1073,7 @@ private:
     uint32_t m_maxPageCount = 65533;
     uint32_t m_maxCounterLength = 100000;
     uint32_t m_maxColumnCount = 1000;
+    uint32_t m_maxTextNodeLength = 100000000;
 
     friend EngineLimits* engineLimits();
 };

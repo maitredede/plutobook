@@ -90,16 +90,50 @@ TextNode::TextNode(Document* document, const HeapString& data)
 {
 }
 
+const HeapString& TextNode::data() const
+{
+    flushPendingData();
+    return m_data;
+}
+
+void TextNode::setData(const HeapString& data)
+{
+    m_data = data;
+    m_pendingData.clear();
+}
+
 void TextNode::appendData(std::string_view data)
 {
-    m_data = heap()->concatenateString(m_data, data);
+    // Defense in depth (V19): cap the total length a single text node can accumulate, independent of
+    // the linear-time accumulation implemented below. The default is generous enough to stay clear of
+    // any legitimate document while still bounding worst-case memory for pathological input (e.g. a
+    // deep XML entity expansion whose output stays under expat's own amplification guard).
+    if(auto maxLength = engineLimits()->maxTextNodeLength()) {
+        auto currentLength = m_data.size() + m_pendingData.size();
+        if(currentLength >= maxLength)
+            return;
+        auto available = maxLength - currentLength;
+        if(data.size() > available)
+            data = data.substr(0, available);
+    }
+
+    m_pendingData.append(data);
+}
+
+void TextNode::flushPendingData() const
+{
+    if(m_pendingData.empty())
+        return;
+    m_data = heap()->concatenateString(m_data, m_pendingData);
+    m_pendingData.clear();
+    m_pendingData.shrink_to_fit();
 }
 
 bool TextNode::isHidden(const Box* parent) const
 {
-    if(m_data.empty())
+    if(data().empty())
         return true;
-    for(auto cc : m_data) {
+    for(auto cc : data()) {
         if(!isSpace(cc)) {
             return false;
         }
@@ -128,7 +162,7 @@ Box* TextNode::createBox(const RefPtr<BoxStyle>& style)
     if(parentNode()->isSVGElement())
         return new (heap()) SVGInlineTextBox(this, style);
     auto box = new (heap()) TextBox(this, style);
-    box->setText(m_data);
+    box->setText(data());
     return box;
 }
 

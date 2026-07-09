@@ -118,6 +118,7 @@ foyer partagé pour V06-V12 : **réutiliser cette classe verbatim**, ne pas cré
 | `column-count` max | 1000 | V12 | `maxColumnCount` — **fait** |
 | nombre de pages max | 100 000 | V09 | `maxPageCount` — **fait** |
 | longueur max de représentation de compteur | 100 000 | V10 | `maxCounterLength` — **fait** |
+| longueur max accumulée d'un nœud texte | 100 000 000 caractères | V19 | `maxTextNodeLength` — **fait** (défense en profondeur ; le correctif principal est l'accumulation linéaire dans `TextNode::appendData`) |
 
 Toujours : **défaut qui ne casse pas le rendu légitime**, exposé C++ et C, documenté.
 
