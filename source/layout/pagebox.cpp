@@ -15,6 +15,7 @@
 #include "cssrule.h"
 
 #include <cmath>
+#include <limits>
 
 namespace plutobook {
 
@@ -692,7 +693,13 @@ void PageLayout::layout()
     }
 
     if(m_document->containerHeight()) {
-        Counters counters(m_document, std::ceil(m_document->height() / m_document->containerHeight()));
+        constexpr auto kMaxPageCountValue = static_cast<double>(std::numeric_limits<uint32_t>::max());
+        auto pageCountValue = std::ceil(static_cast<double>(m_document->height()) / m_document->containerHeight());
+        if(!std::isfinite(pageCountValue) || pageCountValue < 0.0)
+            pageCountValue = 0.0;
+        else if(pageCountValue > kMaxPageCountValue)
+            pageCountValue = kMaxPageCountValue;
+        Counters counters(m_document, static_cast<uint32_t>(pageCountValue));
         for(uint32_t pageIndex = 0; pageIndex < counters.pageCount(); ++pageIndex) {
             if(pageIndex > 0) pageStyle = m_document->styleForPage(emptyGlo, pageIndex, pagePseudoType(pageIndex));
             auto pageBox = PageBox::create(pageStyle, emptyGlo, pageIndex, pageWidth, pageHeight, pageScaleFactor);

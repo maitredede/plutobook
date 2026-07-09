@@ -116,7 +116,7 @@ foyer partagé pour V06-V12 : **réutiliser cette classe verbatim**, ne pas cré
 | profondeur d'imbrication (parse/layout/paint/destruction) | 512 | V08 | `maxNestingDepth` — **fait** |
 | budget d'expansion `<use>` (nœuds instanciés) + profondeur | 100 000 nœuds / prof. 512 | V07 | `maxUseExpansion` + `maxUseDepth` — **fait** |
 | `column-count` max | 1000 | V12 | `maxColumnCount` (à ajouter) |
-| nombre de pages max | 100 000 | V09 | `maxPageCount` (à ajouter) |
+| nombre de pages max | 100 000 | V09 | `maxPageCount` — **fait** |
 | longueur max de représentation de compteur | 100 000 | V10 | `maxCounterLength` (à ajouter) |
 
 Toujours : **défaut qui ne casse pas le rendu légitime**, exposé C++ et C, documenté.

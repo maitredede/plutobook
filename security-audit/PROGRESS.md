@@ -18,8 +18,8 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 | [x] | V05 | Bombe de décompression d'image | Haute | 2806e2d |
 | [x] | V06 | colspan / col span | Haute | c35e686 |
 | [x] | V07 | Expansion SVG `<use>` | Haute | 7897a70 |
-| [x] | V08 | Récursion non bornée | Haute | voir `git log` |
-| [ ] | V09 | Nombre de pages | Moyenne+ | — |
+| [x] | V08 | Récursion non bornée | Haute | 583dfcf |
+| [x] | V09 | Nombre de pages | Moyenne+ | voir `git log` |
 | [ ] | V10 | @counter-style pad / additive | Moyenne+ | — |
 | [ ] | V11 | Stride stb→cairo | Moyenne | — |
 | [ ] | V12 | column-count | Moyenne | — |

@@ -529,13 +529,32 @@ add(
  poc={
   "repro.html": """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
-  @page { size: 20px 20px; }
+  @page { size: 20px 20px; margin: 0; }
   html { height: 1000000000px; }
 </style></head><body>x</body></html>
 """,
  },
- fix="<p>Plafond configurable du nombre de pages + garde <code>UINT32_MAX</code> avant conversion.</p>",
- config="Nombre de pages max configurable (defaut sain).",
+ fix="""<p>Deux gardes complementaires : (1) dans <code>PageLayout::layout()</code>
+ (<code>source/layout/pagebox.cpp</code>), le resultat de <code>ceil(height/containerHeight)</code> est
+ calcule en <code>double</code> et clampe a une valeur finie <code>&le; UINT32_MAX</code> avant la
+ conversion vers <code>uint32_t</code> (evite l'UB si l'entree produit une hauteur/ratio astronomique) ;
+ (2) le constructeur <code>Counters::Counters(Document*, uint32_t pageCount)</code>
+ (<code>source/counters.cpp</code>) clampe ensuite ce compte au plafond configurable -- la boucle de
+ construction des <code>PageBox</code> lit <code>counters.pageCount()</code>, donc ce seul point suffit
+ a borner a la fois le nombre de pages reellement construites et le compteur <code>pages</code> expose a
+ <code>counter(pages)</code> (numerotation "Page X sur Y" en marge de page).</p>
+ <p><em>Limite connue, hors perimetre</em> : en verifiant ce correctif, un defaut preexistant et
+ independant a ete observe dans l'ecriture PDF (bibliotheque Cairo 1.18.4) : au-dela de 65536 pages
+ totales dans un meme document, le fichier PDF produit devient illisible (trailer/xref corrompu, meme
+ constat sous <code>poppler</code> et <code>ghostscript</code>), reproductible aussi bien sur le code
+ non modifie (a un nombre de pages controle, sans rapport avec V09) que sur ce correctif. Le defaut
+ <code>maxPageCount=100000</code> ci-dessous est superieur a ce seuil : un document qui atteint reellement
+ le plafond peut donc produire un PDF corrompu plutot qu'un PDF valide (mais le processus ne crashe pas et
+ ne consomme pas de memoire non bornee -- l'objectif memoire/UB de V09 est atteint). Corriger l'ecriture
+ PDF elle-meme est hors perimetre de V09 (bug distinct, cote serialisation Cairo/PDF, pas
+ pagination/conversion) -- candidat pour un futur correctif dedie.</p>""",
+ config="Plafond configurable via <code>EngineLimits::setMaxPageCount</code> (defaut 100000 pages, <code>0</code> = illimite -- non recommande) ; API C <code>plutobook_set_max_page_count</code>.",
+ status="done",
 )
 
 add(
