@@ -732,6 +732,7 @@ add(
  },
  fix="<p>Check every decoder return value and the <code>malloc</code> before use.</p>",
  config="Robustness fix.",
+ status="done",
 )
 
 add(
