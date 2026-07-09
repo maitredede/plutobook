@@ -630,8 +630,25 @@ open("odd.bmp","wb").write(bmp + data)
 print("odd.bmp written")
 """,
  },
- fix="<p>Use the packed source stride (<code>width*4</code>) to index <code>imageData</code>, not <code>surfaceStride</code>.</p>",
- config="Pure fix (no knob).",
+ fix="""<p>New <code>imageStride = width * 4</code> variable (stb always produces 4 bytes/pixel via
+ <code>STBI_rgb_alpha</code>, with no padding), used to advance <code>src</code> row by row;
+ <code>dst</code> still advances by <code>surfaceStride</code> (the real, possibly padded, cairo
+ buffer stride). The alpha premultiplication logic is unchanged.</p>""",
+ config="""<p>Pure fix (no knob).</p>
+ <p><em>Verification</em>: replayed under ASan (<code>meson setup build-asan -Db_sanitize=address</code>)
+ with BMP/GIF images of varied widths (1 to 257px, including ones not a multiple of 4/16/32) going
+ through the stb path &mdash; no errors, correct output (expected non-transparent pixels present). On
+ this system, the cairo function <code>cairo_format_stride_for_width(ARGB32, w)</code> always returns
+ exactly <code>w*4</code> (checked for w=1..20): the stride is never padded, so the bug remains
+ <strong>latent</strong> on this particular build and ASan cannot trigger the over-read through the
+ full pipeline here. The fix's logic was independently verified with an isolated harness reproducing
+ the exact indexing pattern (an exactly-sized packed stb buffer + an artificially simulated "cairo"
+ stride larger than <code>width*4</code>): the unfixed indexing (indexing <code>src</code> by the
+ enlarged stride) triggers a clean ASan <code>heap-buffer-overflow</code> read right at the packed
+ buffer's boundary; the fixed indexing (via <code>imageStride</code>) runs with no errors. This
+ confirms the fix is correct for any cairo build that would actually pad the ARGB32 stride beyond
+ <code>width*4</code>.</p>""",
+ status="done",
 )
 
 add(
