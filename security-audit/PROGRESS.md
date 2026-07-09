@@ -26,10 +26,31 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`).
 | [x] | V13 | Overflow entier | Basse | bb826f2 |
 | [x] | V14 | Retours turbojpeg/webp | Basse | 2945ca0 |
 | [x] | V15 | Bornes en assert (latent) | Basse | 086414c |
-| [x] | V16 | expat billion-laughs | Info | (voir commit courant) |
+| [x] | V16 | expat billion-laughs | Info | 371a78a |
+
+**16/16 corrigés.** Rebuild propre depuis zéro OK ; batterie de PoC rejouée sur l'état intégré
+(tout borné/refusé, aucun crash/hang/OOM).
+
+## Suivi — problèmes découverts pendant les correctifs (hors périmètre des 16)
+
+Trouvés en vérifiant les fixes ; **non corrigés** (distincts des 16 findings), à traiter séparément :
+
+- **Layout de tables profondément imbriquées** : temps de calcul exponentiel de la largeur
+  intrinsèque au-delà de ~80-100 niveaux (pré-existant, indépendant de V08). DoS CPU résiduel sous
+  le cap de profondeur. (repéré en V08)
+- **`Heap::concatenateString` O(n²)** (`source/heapstring.h`) : `TextNode::appendData` recopie toute
+  la chaîne accumulée à chaque callback character-data, sur l'arène PMR monotone jamais libérée →
+  une bombe d'entités XML profonde peut faire `std::bad_alloc` avant la protection expat. (V16)
+- **Balancing multicolonne superlinéaire** en taille de contenu, même à `column-count` légitime.
+  Perf, distinct de V12. (V12)
+- **Writer PDF Cairo 1.18.4** : xref/trailer corrompu au-delà de ~65536 pages (bug Cairo, sans
+  crash). Le défaut `maxPageCount=100000` dépasse ce seuil → envisager un défaut ≤ 65536. (V09)
+- **memcpy sur `data()` null** dans `Heap::createString` (`heapstring.h:72`) pour un `string_view`
+  vide, atteignable via `content: "\` + EOF (UB). (repéré en V15 ; le `std::abs(INT_MIN)` voisin a
+  été corrigé dans le commit V13)
 
 ## Notes
 
-- (Le rapport commit initial ne coche rien : tous les statuts sont « à corriger ».)
-- À chaque correctif : cocher la case, renseigner le hash, passer `status="done"` dans
-  `security-audit/tools/genreport.py` et régénérer.
+- Le premier commit (rapport) ne coche rien : tous les statuts sont « à corriger ».
+- Correctifs faits par un agent **Claude Code Sonnet 5**, un commit par problème, build+PoC vérifiés.
+- Statut du rapport HTML piloté par `status`/`FIXCOMMITS` dans `security-audit/tools/genreport.py`.
