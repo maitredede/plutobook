@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V16 &middot; XML billion-laughs protection depends on the expat version</h1>
 <p><span class="badge sev-info">Info</span> &nbsp; <span class="muted">Info / dependency</span></p>
 <div class="card">
-<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Status</b> <span class="status-done">fixed</span></div>
 <div class="kv"><b>Key file</b> <code>meson.build:8-11</code></div>
 </div>
 
@@ -37,10 +37,28 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <ul><li><code>poc/lol.xml</code></li></ul>
 
 <h2>Proposed fix</h2>
-<p>Pin/verify expat &ge; 2.4.0, or explicitly set <code>XML_SetBillionLaughsAttackProtectionMaximumAmplification</code>.</p>
+<p><code>meson.build</code> now pins <code>dependency('expat', version: '&ge;2.4.0', ...)</code>:
+ a system expat that is too old is rejected by meson, which then falls back to the bundled
+ subproject (already protected). As a belt-and-suspenders complement,
+ <code>XMLParser::parse</code> (<code>source/xmlparser.cpp</code>) now explicitly sets, right after
+ <code>XML_ParserCreateNS</code>: <code>XML_SetBillionLaughsAttackProtectionMaximumAmplification(parser,
+ 100.0f)</code> and <code>XML_SetBillionLaughsAttackProtectionActivationThreshold(parser, 8*1024*1024)</code>
+ (the same values as expat &ge; 2.4.0's own defaults, set explicitly rather than relying solely on
+ the library's defaults). Both calls are guarded by
+ <code>#if defined(XML_MAJOR_VERSION) &amp;&amp; (&hellip; &gt;= 2.4.0)</code> (checked after
+ including <code>expat.h</code>) so the code keeps compiling if the version floor is ever lowered.
+ <code>expat.h</code> only declares these two prototypes if <code>XML_DTD</code> or
+ <code>XML_GE</code> is defined by the includer (matching how the linked expat was built); a local
+ <code>#define XML_GE 1</code> (before the include) unlocks only these two prototypes -- this does
+ not change the behavior of the already-built library and enables no DTD/external/parameter entity
+ parsing: no such handler is registered anywhere in this file (verified by grep), XXE remains
+ unreachable.</p>
 
 <h2>Configuration (default + configurable)</h2>
-<p>Minimum expat version enforced in the build.</p>
+<p>Minimum expat version enforced in the build (<code>&ge;2.4.0</code>) + explicit
+ amplification-protection calls (max factor 100x, activation threshold 8&nbsp;MiB), not exposed as a
+ user knob (safe values aligned with expat's own defaults, a hardening fix rather than a
+ configurable feature).</p></p>
 
 <footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
 Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>

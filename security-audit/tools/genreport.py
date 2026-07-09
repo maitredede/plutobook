@@ -780,8 +780,27 @@ add(
 <lolz>&lol4;</lolz>
 """,
  },
- fix="<p>Pin/verify expat &ge; 2.4.0, or explicitly set <code>XML_SetBillionLaughsAttackProtectionMaximumAmplification</code>.</p>",
- config="Minimum expat version enforced in the build.",
+ fix="""<p><code>meson.build</code> now pins <code>dependency('expat', version: '&ge;2.4.0', ...)</code>:
+ a system expat that is too old is rejected by meson, which then falls back to the bundled
+ subproject (already protected). As a belt-and-suspenders complement,
+ <code>XMLParser::parse</code> (<code>source/xmlparser.cpp</code>) now explicitly sets, right after
+ <code>XML_ParserCreateNS</code>: <code>XML_SetBillionLaughsAttackProtectionMaximumAmplification(parser,
+ 100.0f)</code> and <code>XML_SetBillionLaughsAttackProtectionActivationThreshold(parser, 8*1024*1024)</code>
+ (the same values as expat &ge; 2.4.0's own defaults, set explicitly rather than relying solely on
+ the library's defaults). Both calls are guarded by
+ <code>#if defined(XML_MAJOR_VERSION) &amp;&amp; (&hellip; &gt;= 2.4.0)</code> (checked after
+ including <code>expat.h</code>) so the code keeps compiling if the version floor is ever lowered.
+ <code>expat.h</code> only declares these two prototypes if <code>XML_DTD</code> or
+ <code>XML_GE</code> is defined by the includer (matching how the linked expat was built); a local
+ <code>#define XML_GE 1</code> (before the include) unlocks only these two prototypes -- this does
+ not change the behavior of the already-built library and enables no DTD/external/parameter entity
+ parsing: no such handler is registered anywhere in this file (verified by grep), XXE remains
+ unreachable.</p>""",
+ config="""Minimum expat version enforced in the build (<code>&ge;2.4.0</code>) + explicit
+ amplification-protection calls (max factor 100x, activation threshold 8&nbsp;MiB), not exposed as a
+ user knob (safe values aligned with expat's own defaults, a hardening fix rather than a
+ configurable feature).</p>""",
+ status="done",
 )
 
 # ---------------------------------------------------------------------------

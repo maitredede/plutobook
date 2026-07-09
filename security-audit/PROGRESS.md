@@ -25,8 +25,8 @@ finding. One commit per finding (see `FIX-GUIDE.md`).
 | [x] | V12 | column-count | Medium | 9821b38 |
 | [x] | V13 | Integer overflow | Low | bb826f2 |
 | [x] | V14 | turbojpeg/webp return values | Low | 2945ca0 |
-| [x] | V15 | Assert-only bounds (latent) | Low | see `git log` (current commit) |
-| [ ] | V16 | expat billion-laughs | Info | — |
+| [x] | V15 | Assert-only bounds (latent) | Low | 086414c |
+| [x] | V16 | expat billion-laughs | Info | (see current commit) |
 
 ## Notes
 

@@ -7,7 +7,12 @@ project('plutobook', 'cpp', 'c',
 
 expat_dep = dependency('expat',
     required: true,
-    version: '>=2.1.0',
+    # >=2.4.0: billion-laughs (internal entity expansion) amplification
+    # protection is enabled by default from this version onward (V16).
+    # A too-old system expat is rejected, which falls back to the bundled
+    # subproject (currently 2.7.3, already protected) instead of silently
+    # linking an unprotected system copy.
+    version: '>=2.4.0',
     fallback: ['expat', 'expat_dep']
 )
 

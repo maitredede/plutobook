@@ -10,6 +10,16 @@
 #include "xmldocument.h"
 #include "plutobook.hpp"
 
+// Requests the expat.h prototypes for the billion-laughs protection setters
+// (V16, see below): expat.h only declares them when XML_DTD or XML_GE is
+// defined by the includer, matching how the linked libexpat was itself built
+// (Debian/bundled expat >= 2.4.0 both export these symbols). This does not
+// enable DTD/external/parameter-entity parsing by itself -- no such handler
+// is registered in this file -- it only unlocks the two prototypes used
+// below to harden internal entity expansion.
+#ifndef XML_GE
+#define XML_GE 1
+#endif
 #include <expat.h>
 
 namespace plutobook {
@@ -48,6 +58,19 @@ bool XMLParser::parse(std::string_view content)
     XML_SetUserData(parser, this);
     XML_SetElementHandler(parser, startElementCallback, endElementCallback);
     XML_SetCharacterDataHandler(parser, characterDataCallback);
+
+    // Billion-laughs (internal entity expansion) defense-in-depth (V16). expat
+    // enables this protection by default from 2.4.0 onward, and meson.build
+    // already requires expat >= 2.4.0 -- but set the thresholds explicitly
+    // rather than relying solely on expat's built-in defaults, in case a
+    // vendored/patched expat ships different defaults. No external-entity or
+    // parameter-entity handler is registered above/below, so XXE stays
+    // unreachable; this only bounds internal entity expansion.
+#if defined(XML_MAJOR_VERSION) && (XML_MAJOR_VERSION > 2 || (XML_MAJOR_VERSION == 2 && XML_MINOR_VERSION >= 4))
+    XML_SetBillionLaughsAttackProtectionMaximumAmplification(parser, 100.0f);
+    XML_SetBillionLaughsAttackProtectionActivationThreshold(parser, 8 * 1024 * 1024);
+#endif
+
     auto status = XML_Parse(parser, content.data(), content.length(), XML_TRUE);
     if(status == XML_STATUS_OK) {
         m_document->finishParsingDocument();
