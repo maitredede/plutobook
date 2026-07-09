@@ -125,6 +125,8 @@ private:
     void insertElement(Element* child, ContainerNode* parent);
     void insertElement(Element* child);
 
+    bool pushElement(Element* element, bool bounded = true);
+
     bool shouldFosterParent() const;
     void findFosterLocation(InsertionLocation& location) const;
     void fosterParent(Node* child);
@@ -143,11 +145,11 @@ private:
     void insertHTMLHtmlElement(const HTMLTokenView& token);
     void insertHeadElement(const HTMLTokenView& token);
     void insertHTMLBodyElement(const HTMLTokenView& token);
-    void insertHTMLFormElement(const HTMLTokenView& token);
+    bool insertHTMLFormElement(const HTMLTokenView& token);
     void insertSelfClosingHTMLElement(const HTMLTokenView& token);
-    void insertHTMLElement(const HTMLTokenView& token);
-    void insertHTMLFormattingElement(const HTMLTokenView& token);
-    void insertForeignElement(const HTMLTokenView& token, const GlobalString& namespaceURI);
+    bool insertHTMLElement(const HTMLTokenView& token, bool bounded = true);
+    bool insertHTMLFormattingElement(const HTMLTokenView& token);
+    bool insertForeignElement(const HTMLTokenView& token, const GlobalString& namespaceURI);
     void insertTextNode(std::string_view data);
 
     enum class InsertionMode {

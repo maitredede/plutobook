@@ -757,6 +757,26 @@ PLUTOBOOK_API void plutobook_set_max_use_expansion(unsigned int max);
 PLUTOBOOK_API void plutobook_set_max_use_depth(unsigned int max);
 
 /**
+ * @brief Sets the maximum nesting depth accepted while parsing a document or stylesheet.
+ *
+ * Bounds how deeply CSS token blocks (`((((...`), functional pseudo-classes (`:not(:not(...))`),
+ * at-rules (`@media{@media{...}}`), and -- most importantly -- HTML/XML/SVG element nesting may
+ * nest. Without a bound, sufficiently deep input exhausts the C++ call stack in the recursive-descent
+ * parsers and in every later pass that walks the DOM by depth (finalization, layout, paint,
+ * destruction), crashing the process.
+ *
+ * Once this depth is reached, over-deep CSS constructs are rejected as a parse error, and further
+ * HTML/XML/SVG elements are still created (so their content is preserved) but are no longer nested
+ * deeper -- additional nesting becomes siblings of the element at the cap instead.
+ *
+ * If not set, the default is 512, comfortably above any depth produced by legitimate documents.
+ * Passing `0` disables the limit -- not recommended for untrusted input.
+ *
+ * @param max The maximum accepted nesting depth, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_nesting_depth(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {

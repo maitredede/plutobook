@@ -17,6 +17,15 @@
 
 namespace plutobook {
 
+// Bounds the recursion of CSSTokenStream::consumeComponent() (V08) against
+// EngineLimits::maxNestingDepth(). Declared here (rather than making that limit reachable from this
+// header) and defined in csstokenizer.cpp, which includes plutobook.hpp -- internal headers otherwise
+// never depend on the public API header, so the check is kept out-of-line instead of pulling it in
+// here. cssNestingScopeEnter() returns false, without side effect, once the shared depth counter has
+// reached the limit; a matching cssNestingScopeLeave() call must follow every call that returned true.
+bool cssNestingScopeEnter();
+void cssNestingScopeLeave();
+
 class CSSToken {
 public:
     enum class Type : uint8_t {
@@ -179,8 +188,21 @@ public:
         case CSSToken::Type::LeftCurlyBracket: {
             auto closeType = CSSToken::closeType(m_begin->type());
             m_begin += 1;
-            while(m_begin < m_end && m_begin->type() != closeType)
-                consumeComponent();
+            // Recursing once per nested open token (V08) lets pathological input such as
+            // `((((...` or deeply nested `:not(:not(...))` exhaust the C++ call stack. Once
+            // EngineLimits::maxNestingDepth() (cssNestingScopeEnter(), defined in csstokenizer.cpp to
+            // avoid pulling plutobook.hpp into this header) is reached, stop recursing and instead
+            // skip tokens flatly up to the matching close token, treating the over-deep construct as
+            // opaque rather than descending into it -- no crash, no attempt to interpret it further.
+            if(cssNestingScopeEnter()) {
+                while(m_begin < m_end && m_begin->type() != closeType)
+                    consumeComponent();
+                cssNestingScopeLeave();
+            } else {
+                while(m_begin < m_end && m_begin->type() != closeType)
+                    m_begin += 1;
+            }
+
             if(m_begin < m_end)
                 m_begin += 1;
             break;
@@ -197,6 +219,9 @@ public:
         auto closeType = CSSToken::closeType(m_begin->type());
         m_begin += 1;
         auto blockBegin = m_begin;
+        // Not itself recursive: every token in the loop below (including further nested opens) goes
+        // through consumeComponent(), which already guards its own recursion (see above), so this
+        // loop needs no separate depth check.
         while(m_begin < m_end && m_begin->type() != closeType)
             consumeComponent();
         auto blockEnd = m_begin;

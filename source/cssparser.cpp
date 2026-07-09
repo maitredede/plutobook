@@ -10,6 +10,7 @@
 #include "csstokenizer.h"
 #include "stringutils.h"
 #include "document.h"
+#include "plutobook.hpp"
 
 #include <sstream>
 #include <algorithm>
@@ -20,6 +21,21 @@ namespace plutobook {
 CSSParser::CSSParser(const CSSParserContext& context, Heap* heap)
     : m_heap(heap), m_context(context)
 {
+}
+
+CSSParser::NestingScope::NestingScope(CSSParser& parser)
+    : m_parser(parser)
+{
+    auto maxDepth = engineLimits()->maxNestingDepth();
+    m_ok = !maxDepth || parser.m_nestingDepth < maxDepth;
+    if(m_ok)
+        ++parser.m_nestingDepth;
+}
+
+CSSParser::NestingScope::~NestingScope()
+{
+    if(m_ok)
+        --m_parser.m_nestingDepth;
 }
 
 CSSRuleList CSSParser::parseSheet(std::string_view content)
@@ -468,6 +484,14 @@ RefPtr<CSSPageMarginRule> CSSParser::consumePageMarginRule(CSSTokenStream& input
 
 void CSSParser::consumeRuleList(CSSTokenStream& input, CSSRuleList& rules)
 {
+    // consumeMediaRule() calls back into this function for its block, so nested at-rules such as
+    // `@media{@media{@media{...}}}` recurse once per nesting level (V08). Once the shared depth limit
+    // is reached, stop descending and leave the remaining (over-deep) content unparsed -- this call
+    // simply contributes no further rules -- instead of recursing further. This guard also runs on
+    // the non-recursive, top-level call from parseSheet(), which costs one negligible depth unit.
+    NestingScope scope(*this);
+    if(!scope.ok())
+        return;
     while(!input.empty()) {
         input.consumeWhitespace();
         if(input->type() == CSSToken::Type::CDC
@@ -548,6 +572,13 @@ bool CSSParser::consumePageSelector(CSSTokenStream& input, CSSPageSelector& sele
 
 bool CSSParser::consumeSelectorList(CSSTokenStream& input, CSSSelectorList& selectors, bool relative)
 {
+    // consumePseudoSelector() calls back into this function for :is()/:not()/:has()/:where(), so a
+    // selector such as `:not(:not(:not(...)))` recurses once per nesting level (V08). Fail this
+    // (sub-)selector list gracefully -- same as any other malformed selector -- once the shared depth
+    // limit is reached, instead of recursing further.
+    NestingScope scope(*this);
+    if(!scope.ok())
+        return false;
     do {
         CSSSelector selector(m_heap);
         if(!consumeSelector(input, selector, relative))

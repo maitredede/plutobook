@@ -113,7 +113,7 @@ foyer partagé pour V06-V12 : **réutiliser cette classe verbatim**, ne pas cré
 | Limite | Défaut proposé | Concerne | Accesseur |
 |--------|----------------|----------|-----------|
 | `colspan` / `rowspan` / `col span` max | 1000 (valeur spec HTML) | V06 | `maxTableSpan` — **fait** |
-| profondeur d'imbrication (parse/layout/paint/destruction) | 512 | V08 | `maxNestingDepth` (à ajouter) |
+| profondeur d'imbrication (parse/layout/paint/destruction) | 512 | V08 | `maxNestingDepth` — **fait** |
 | budget d'expansion `<use>` (nœuds instanciés) + profondeur | 100 000 nœuds / prof. 512 | V07 | `maxUseExpansion` + `maxUseDepth` — **fait** |
 | `column-count` max | 1000 | V12 | `maxColumnCount` (à ajouter) |
 | nombre de pages max | 100 000 | V09 | `maxPageCount` (à ajouter) |

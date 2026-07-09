@@ -461,10 +461,56 @@ open("deep.css.html","w").write("<!DOCTYPE html><html><head><style>a:" + "("*200
 print("deep.html et deep.css.html ecrits")
 """,
  },
- fix="""<p>Compteur de profondeur partage (modele <code>kMaxImportDepth=256</code>,
- <code>cssstylesheet.cpp:970</code>) applique dans <code>consumeComponent</code>/<code>consumeBlock</code>,
- la recursion selecteurs/at-rules, le parsing (limite d'imbrication) et le layout.</p>""",
- config="Profondeur d'imbrication max configurable, <strong>defaut ~512</strong>.",
+ fix="""<p>Compteur de profondeur partage, verifie dans <code>CSSTokenStream::consumeComponent</code>
+ (<code>csstokenizer.h</code>/<code>.cpp</code>, thread_local) pour la recursion de blocs de tokens
+ (<code>((((&hellip;</code>, <code>:not(:not(&hellip;))</code>) ; dans <code>CSSParser::NestingScope</code>
+ (RAII, membre <code>m_nestingDepth</code>) pour la recursion selecteurs (<code>consumeSelectorList</code>,
+ rappelee par <code>consumePseudoSelector</code>) et at-rules (<code>consumeRuleList</code>, rappelee par
+ <code>consumeMediaRule</code>). Au-dela de la limite : arret de la recursion, construction traitee comme
+ une erreur de parsing (pas de crash, pas d'UB).</p>
+ <p>Cote arbre : profondeur bornee <strong>au parsing</strong>, pas dans les passes recursives en aval.
+ HTML : un premier correctif ne bornait que le point de rattachement DOM (<code>currentInsertionParent()</code>)
+ en laissant la pile <code>HTMLElementStack</code> (<code>m_openElements</code>) croitre sans limite ; or
+ cette pile est parcourue de bout en bout par (quasi) toutes les verifications de portee de l'algorithme
+ HTML5 (<code>inScope</code>, <code>inTableScope</code>, <code>inButtonScope</code>, ...), executees a
+ chaque token -- ce premier correctif eliminait donc le crash par depassement de pile mais pas le cout
+ <code>O(profondeur)</code> de ces verifications, qui restait quadratique en pratique (<code>&lt;div&gt;</code>
+ x200000 ne crashait plus mais mettait &gt;60s). Le correctif final borne <strong>la pile elle-meme</strong>
+ (<code>HTMLParser::pushElement()</code>) : une fois <code>maxNestingDepth()</code> elements ouverts, une
+ balise ouvrante supplementaire est toujours creee et inseree dans le DOM (contenu preserve, devient un
+ frere de l'element au plafond plutot qu'un descendant) mais n'est plus poussee sur la pile -- les
+ verifications de portee restent alors bornees en <code>O(maxNestingDepth)</code> quel que soit le nombre
+ total de balises. Les transitions de mode d'insertion qui accompagnent normalement un <code>push</code>
+ (entree en mode table/select/frameset/...) sont conditionnees au succes de ce <code>push</code>, pour que
+ la machine a etats ne se croie jamais "a l'interieur" d'un element qui n'est pas reellement ouvert -- ce
+ qui aurait fait echouer les <code>assert</code> de coherence de portee (ex. "un td/th est en table scope"
+ en mode InCell). De meme, les quelques points ou l'algorithme insere une balise implicite puis retraite le
+ token (ex. <code>&lt;tbody&gt;</code> implicite avant un <code>&lt;tr&gt;</code> hors contexte) ne
+ retraitent que si cette insertion implicite a reellement eu lieu, sinon le token est abandonne plutot que
+ de boucler indefiniment sur la meme balise implicite jamais poussee. Les elements
+ <code>&lt;title&gt;/&lt;style&gt;/&lt;script&gt;/&lt;textarea&gt;/&lt;xmp&gt;/&lt;iframe&gt;/&lt;noembed&gt;</code>
+ sont exemptes du plafond : une fois le tokenizer bascule en RCDATA/RAWTEXT/donnees-de-script, il ne
+ reconnait plus que leur propre balise fermante, donc ils ne peuvent jamais s'imbriquer eux-memes pour
+ contourner la limite. XML/SVG (memes handlers expat) : profondeur reelle suivie symetriquement dans
+ <code>XMLParser::handleStartElement</code>/<code>handleEndElement</code> ; <code>m_currentNode</code>
+ n'avance/ne recule que tant que cette profondeur reste sous le plafond, meme logique de rattachement a
+ un ancetre fixe au-dela (pas de pile de portee equivalente a <code>HTMLElementStack</code> a borner cote
+ XML). Comme la profondeur du DOM resultant est ainsi bornee, les passes recursives en aval
+ (<code>finishParsingDocument</code>, layout, paint, destruction <code>~Box</code>) le sont aussi sans
+ compteur separe dans chacune.</p>""",
+ config="""Nouvelle limite <code>EngineLimits::maxNestingDepth</code> (<code>setMaxNestingDepth</code> /
+ <code>maxNestingDepth()</code>), <strong>defaut 512</strong>, <code>0</code> = illimite. API C
+ <code>plutobook_set_max_nesting_depth(unsigned int)</code>. Verifie : <code>&lt;div&gt;</code>x200000
+ passe de &gt;60s (timeout) a ~11s (build debug non optimise ; &lt;1s en build release) et un plafond plus
+ bas (ex. 20 via un harnais de test) reste rapide sur une entree bien plus profonde, confirmant une
+ complexite desormais lineaire. <em>Limite connue, hors perimetre</em> : au-dela du plafond, une table
+ imbriquee tres profonde (ex. <code>&lt;table&gt;&lt;tr&gt;&lt;td&gt;</code> repete 2000 fois) ne
+ crashe plus et ne boucle plus, mais peut rester tres lente -- le <em>layout</em> des tables (calcul de
+ largeur intrinseque des tableaux imbriques), pas le <em>parsing</em>, a un cout deja exponentiel en
+ profondeur reelle de nesting <strong>avant meme ce correctif</strong> (verifie sur la base non modifiee) ;
+ non corrige ici (hors perimetre recursion/pile de V08 -- candidat pour un futur correctif dedie au
+ layout de tables).""",
+ status="done",
 )
 
 add(
