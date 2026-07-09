@@ -777,8 +777,27 @@ add(
 <lolz>&lol4;</lolz>
 """,
  },
- fix="<p>Epingler/verifier expat &ge; 2.4.0, ou fixer explicitement <code>XML_SetBillionLaughsAttackProtectionMaximumAmplification</code>.</p>",
- config="Version minimale d'expat imposee dans le build.",
+ fix="""<p><code>meson.build</code> epingle desormais <code>dependency('expat', version: '&ge;2.4.0', ...)</code> :
+ un expat systeme trop ancien est rejete par meson, qui retombe alors sur le sous-projet bundle (deja
+ protege). En complement (belt-and-suspenders), <code>XMLParser::parse</code>
+ (<code>source/xmlparser.cpp</code>) fixe desormais explicitement, juste apres
+ <code>XML_ParserCreateNS</code> : <code>XML_SetBillionLaughsAttackProtectionMaximumAmplification(parser,
+ 100.0f)</code> et <code>XML_SetBillionLaughsAttackProtectionActivationThreshold(parser, 8*1024*1024)</code>
+ (memes valeurs que les defauts expat &ge; 2.4.0, fixees explicitement plutot que de compter uniquement
+ sur les defauts de la bibliotheque). Ces deux appels sont proteges par
+ <code>#if defined(XML_MAJOR_VERSION) &amp;&amp; (&hellip; &gt;= 2.4.0)</code> (verifie apres l'inclusion
+ de <code>expat.h</code>) pour rester compilable si le plancher de version venait a etre abaisse.
+ <code>expat.h</code> ne declare ces deux prototypes que si <code>XML_DTD</code> ou <code>XML_GE</code>
+ est defini par l'includer (correspondant a la maniere dont l'expat lie a ete construit) ; un
+ <code>#define XML_GE 1</code> local (avant l'inclusion) debloque uniquement ces deux prototypes -- ceci
+ ne change rien au comportement de la bibliotheque deja compilee et n'active aucun parsing de DTD/entite
+ externe/parametre : aucun handler de ce type n'est enregistre dans ce fichier (verifie par grep), XXE
+ reste non atteignable.</p>""",
+ config="""Version minimale d'expat imposee dans le build (<code>&ge;2.4.0</code>) + appels explicites de
+ protection amplification (facteur max 100x, seuil d'activation 8&nbsp;MiB) non exposes comme knob
+ utilisateur (valeurs sures alignees sur les defauts expat, correctif de durcissement plutot que
+ fonctionnalite configurable).</p>""",
+ status="done",
 )
 
 # ---------------------------------------------------------------------------
