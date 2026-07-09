@@ -31,7 +31,7 @@ finding. One commit per finding (see `FIX-GUIDE.md`). **Push after every commit.
 | [x] | V18 | maxPageCount default > Cairo PDF limit | Medium | see git log |
 | [x] | V19 | `Heap::concatenateString` O(n²) | High | see git log |
 | [x] | V20 | Exponential nested table layout | High | see git log |
-| [ ] | V21 | Superlinear multicolumn balancing | Medium | — |
+| [x] | V21 | Superlinear multicolumn balancing | Medium | see git log |
 
 **V01–V16 fixed** (clean rebuild OK, integrated PoCs verified). **V17–V21** = issues discovered
 while fixing, now tracked and to be handled in order: V17 → V18 → V19 → V20 → V21.
@@ -76,7 +76,27 @@ while fixing, now tracked and to be handled in order: V17 → V18 → V19 → V2
   on real nesting up to exactly the limit (depth 8 included, identical); it only differs beyond the
   limit (depth 9+, and only when a row has cells of different natural heights). (V08)
 - **V21** — Superlinear multicolumn balancing in content size, even at a legitimate
-  `column-count`. Performance/CPU DoS, distinct from V12. (V12)
+  `column-count`. Diagnosis **corrected** by instrumentation (per-line/per-pass timing): the
+  balancing loop (`MultiColumnFlowBox::layoutContents()`) is **not** the culprit — the initial
+  estimate (`distributeImplicitBreaks()`) is exactly `totalHeight / columnCount` when there is no
+  explicit column break (verified both algebraically and across many adversarial content shapes):
+  it consistently converges in 1-2 iterations, regardless of content size. The real superlinear
+  cost (per-line timing: ~4-5x more expensive late in a document than early) comes from
+  `TextShapeRun::positionForOffset()`/`offsetForPosition()` (`source/graphics/textshape.cpp`,
+  outside this file): these functions rescan the glyph array from index 0 on every call instead of
+  resuming from a cached position — reproduces identically on plain text with no columns involved.
+  Out of scope for this fix (different file, wide blast radius across all text layout) —
+  **flagged as a separate follow-up** for a future audit entry. Fix shipped here (documented
+  fallback): new `EngineLimits::maxColumnBalancingIterations` limit (default **10**, configurable,
+  0 = unlimited) bounding the number of balancing relayout passes, to guarantee termination even if
+  some future content shape defeated the initial estimate (exact in practice today, but not proven
+  for every adversarial input). Verified: non-regression via **byte-for-byte** PDF comparison
+  (pre-fix binary via `git stash` + separate build) on 2/3-column documents, `column-gap`,
+  `column-span:all` (identical); the default (10) is byte-identical to unlimited (0) on the PoC and
+  on a document with many spanners; a deliberately low cap (1, dedicated C harness) does trigger a
+  measurable early stop (different PDF) while still producing complete, valid output (no content
+  lost). Caveat: this fix does **not** make the literal PoC render in linear time — the dominant
+  cause is out of scope (see above). (V12)
 
 ## Notes
 

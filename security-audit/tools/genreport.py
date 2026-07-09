@@ -977,13 +977,34 @@ add(
  title="Superlinear multicolumn balancing in content size",
  keyfile="source/layout/multicolumnbox.cpp",
  locations=[
-   ("source/layout/multicolumnbox.cpp", "balancing algorithm (repeated relayout)"),
+   ("source/layout/multicolumnbox.cpp", "MultiColumnFlowBox::layoutContents(): balancing loop with no iteration bound"),
+   ("include/plutobook.hpp", "EngineLimits::maxColumnBalancingIterations"),
  ],
- nature="""<p>Column balancing is superlinear in content size, even at a legitimate
- <code>column-count</code>: large multicolumn content takes tens of seconds. Distinct from V12
- (which bounds the <em>number</em> of columns): here it's the cost of balancing itself.</p>""",
- risk="<p><strong>Impact</strong>: CPU hang/slowness (DoS) from large multicolumn content.</p>",
- repro=["Generate poc/make-multicol.py (large content, columns:3) &rarr; render &rarr; slow pre-fix, bounded post-fix."],
+ nature="""<p>Diagnosis corrected by temporary instrumentation (per-line and per-pass timing): the
+ balancing loop (<code>MultiColumnFlowBox::layoutContents()</code>,
+ <code>while(changed) {{ ...; changed = layoutColumns(true); }}</code>) is <strong>not</strong> the
+ cause of the superlinear cost observed on the PoC. The initial column-height estimate
+ (<code>distributeImplicitBreaks()</code> / <code>calculateColumnHeight(false)</code>) is exactly
+ <code>totalHeight / columnCount</code> whenever there is no explicit column break -- verified both
+ algebraically and empirically across many content shapes (uniform paragraph, hundreds of blocks of
+ random heights, dozens of <code>column-span:all</code>): the loop consistently converges in 1 or 2
+ iterations, regardless of content size. The real superlinear cost (confirmed by per-line timing:
+ the cost per line grows with position in the document, roughly 4 to 5x more expensive around line
+ 4000 than around line 200 of the same document) comes from
+ <code>TextShapeRun::positionForOffset()</code> / <code>offsetForPosition()</code>
+ (<code>source/graphics/textshape.cpp</code>, outside this file): these functions rescan the glyph
+ array from index 0 on every call instead of resuming from a cached position, which makes each new
+ line of a long text run O(position) and the whole document O(n&sup2;) -- reproduces identically on
+ plain text <strong>with no columns</strong> (same scaling measured on normal paginated content).
+ This is therefore a cost shared by any long text layout, distinct from multicolumn balancing and
+ out of scope for this fix; flagged as a separate follow-up. What remains real and specific to this
+ file: nothing in the balancing loop's exit condition formally guarantees fast termination --
+ converging in 1-2 iterations is an empirical/algebraic fact for the content shapes tested, not a
+ proven property for every future adversarial input.</p>""",
+ risk="""<p><strong>Impact</strong>: large multicolumn content inherits a superlinear text-layout
+ cost (out of scope, see Nature); independently, the balancing loop itself had no explicit bound on
+ its number of iterations.</p>""",
+ repro=["Generate poc/make-multicol.py (large content, columns:3) &rarr; render &rarr; slow both before and after this fix (the real cause is out of scope, see Nature); the iteration cap is verified separately via a dedicated C harness (an artificially low cap = measurable early convergence and still-complete PDF; the default cap = byte-identical to unlimited)."],
  poc={
   "make-multicol.py": """#!/usr/bin/env python3
 # Large multicolumn content to exercise balancing.
@@ -993,9 +1014,32 @@ open("multicol.html","w").write(
 print("multicol.html written")
 """,
  },
- fix="""<p>Bound the number of balancing iterations (or improve the algorithm), configurable,
- without breaking balancing for normal documents.</p>""",
- config="Bounded number of balancing iterations (sane default, configurable).",
+ fix="""<p>Explicitly documented fallback: the "clean algorithmic fix" alternative (binary-search the
+ column height in O(log) iterations instead of the current increment-by-minimum-shortage) was
+ dropped because the current mechanism turned out to already be near-optimal
+ empirically/algebraically for this file -- the real performance win would require fixing
+ <code>TextShapeRun::positionForOffset</code> / <code>offsetForPosition</code>, out of scope for
+ this fix (see Nature). New <code>EngineLimits::maxColumnBalancingIterations</code> limit:
+ <code>MultiColumnFlowBox::layoutContents()</code> stops refining the balancing once this many
+ extra relayout passes have been reached without convergence -- columns may then be slightly less
+ perfectly balanced than an unbounded search would produce, but layout stays correct and
+ terminates.</p>""",
+ config="""New <code>EngineLimits::maxColumnBalancingIterations</code> limit
+ (<code>setMaxColumnBalancingIterations</code> / <code>maxColumnBalancingIterations()</code>),
+ <strong>default 10</strong> (comfortably above the 1-2 iterations observed across every content
+ shape tested, both legitimate and adversarial), <code>0</code> = unlimited (not recommended). C
+ API <code>plutobook_set_max_column_balancing_iterations(unsigned int)</code>. Verified: (a)
+ non-regression -- normal multicolumn documents (2 and 3 columns, <code>column-gap</code>,
+ <code>column-span:all</code>) render <strong>byte-identical</strong> before/after (pre-fix binary
+ via <code>git stash</code> + separate build); (b) the default cap (10) produces a
+ <strong>byte-identical</strong> PDF to the unlimited cap (0) on content with many spanners,
+ confirming it changes nothing for real content; (c) a deliberately low cap (1, via a dedicated C
+ harness calling <code>plutobook_set_max_column_balancing_iterations</code>) produces a different
+ PDF (the mechanism stops much earlier) but still complete and valid -- all content is present
+ (100/100 markers verified on both sides), only column balance differs, confirming the cap works
+ and terminates cleanly with no content loss. Caveat: this fix does <strong>not</strong> make the
+ literal PoC converge to linear time -- the real cause is out of scope (see Nature).""",
+ status="done",
 )
 
 # ---------------------------------------------------------------------------

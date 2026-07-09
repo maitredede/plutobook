@@ -120,6 +120,8 @@ home for V06-V12: **reuse this class verbatim**, do not create a second mechanis
 | max page count | 100,000 | V09 | `maxPageCount` — **done** |
 | max counter representation length | 100,000 | V10 | `maxCounterLength` — **done** |
 | max accumulated text-node length | 100,000,000 characters | V19 | `maxTextNodeLength` — **done** (defense in depth; the main fix is linear accumulation in `TextNode::appendData`) |
+| real table nesting depth | 8 | V20 | `maxTableNestingDepth` — **done** |
+| multicolumn balancing iterations (extra relayouts) | 10 | V21 | `maxColumnBalancingIterations` — **done** (safety net; the loop already converges in 1-2 iterations in practice, see V21) |
 
 Always: **a default that does not break legitimate rendering**, exposed in C++ and C, and
 documented.
