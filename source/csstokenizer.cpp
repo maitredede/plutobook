@@ -8,10 +8,38 @@
 
 #include "csstokenizer.h"
 #include "stringutils.h"
+#include "plutobook.hpp"
 
 #include <cmath>
 
 namespace plutobook {
+
+namespace {
+
+// Shared by every CSSTokenStream::consumeComponent() call (V08), regardless of which translation
+// unit or CSSTokenStream instance it runs on -- CSSTokenStream is a lightweight, frequently-copied
+// value (see CSSTokenStreamGuard, consumeBlock()'s return value), so it cannot itself carry a
+// running depth counter across the recursive calls it makes to itself. thread_local, rather than a
+// plain global, because parsing can run concurrently on different threads (e.g. two Book/Document
+// instances parsed from different threads), each with its own, independent nesting depth.
+thread_local uint32_t g_cssNestingDepth = 0;
+
+} // namespace
+
+bool cssNestingScopeEnter()
+{
+    auto maxDepth = engineLimits()->maxNestingDepth();
+    if(maxDepth && g_cssNestingDepth >= maxDepth)
+        return false;
+    ++g_cssNestingDepth;
+    return true;
+}
+
+void cssNestingScopeLeave()
+{
+    assert(g_cssNestingDepth > 0);
+    --g_cssNestingDepth;
+}
 
 constexpr bool isNameStart(char cc) { return isAlpha(cc) || cc == '_'; }
 constexpr bool isNameChar(char cc) { return isNameStart(cc) || isDigit(cc) || cc == '-'; }

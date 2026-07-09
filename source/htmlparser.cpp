@@ -9,6 +9,7 @@
 #include "htmlparser.h"
 #include "htmldocument.h"
 #include "stringutils.h"
+#include "plutobook.hpp"
 
 namespace plutobook {
 
@@ -305,6 +306,10 @@ void HTMLElementStack::push(Element* element)
     assert(element->tagName() != htmlTag);
     assert(element->tagName() != headTag);
     assert(element->tagName() != bodyTag);
+    // Capping this stack is the caller's job (V08): see HTMLParser::pushElement(), which decides
+    // *whether* to call this at all. HTMLElementStack itself stays a plain, unbounded container --
+    // it has no notion of EngineLimits -- so that every push it does receive keeps the HTML5
+    // tree-construction invariants (scope checks, insertion-mode transitions, ...) consistent.
     m_elements.push_back(element);
 }
 
@@ -720,6 +725,44 @@ void HTMLParser::insertElement(Element* child)
     insertElement(child, currentElement());
 }
 
+bool HTMLParser::pushElement(Element* element, bool bounded)
+{
+    // Bounds the open-elements stack itself against EngineLimits::maxNestingDepth() (V08). This stack
+    // is scanned from top to bottom by essentially every scope check (inScope(), inTableScope(),
+    // inButtonScope(), ...), which run on close to every token; for a long chain of elements with no
+    // intervening scope marker (e.g. <div> x N), each such scan costs O(current depth), so letting the
+    // stack grow without bound turns parsing of deeply nested input into an O(n^2) operation -- this is
+    // what previously made an attachment-only depth cap (bounding only *where* elements land in the
+    // DOM, while this stack kept growing) insufficient: it stopped the stack-overflow crash but not the
+    // quadratic-time hang.
+    //
+    // Once the stack already holds maxNestingDepth() elements, refuse to push further ones. The caller
+    // (insertHTMLElement() et al.) has already attached `element` to the DOM by the time it calls this,
+    // so its content is preserved either way -- it just isn't tracked as "open": it becomes a flattened
+    // sibling of the element at the cap instead of its descendant, which is what keeps this stack, and
+    // therefore every scan over it, bounded from here on. Callers that also transition the insertion
+    // mode alongside pushing (entering table/select/frameset/... context) must gate that transition on
+    // this returning true, so the state machine never claims to be "inside" an element that in fact
+    // never made it onto the stack -- which is what keeps later scope-check asserts (e.g. "a <td>/<th>
+    // is in table scope while in InCell mode") consistent with what is really open.
+    //
+    // `bounded` is false for elements that switch the tokenizer into RCDATA/RAWTEXT/script-data state
+    // (title, style, script, textarea, xmp, iframe, noembed -- see handleRCDataToken()/
+    // handleRawTextToken()/handleScriptDataToken()): while consuming their content, the tokenizer
+    // recognizes nothing but their own matching end tag, so they can never contain a further nested
+    // start tag of their own kind. They cannot be chained to defeat this cap, so exempting them from it
+    // is safe, and it avoids having to track -- across arbitrarily many intervening character tokens --
+    // whether a later end tag's matching start had itself been capped.
+    if(bounded) {
+        auto maxDepth = engineLimits()->maxNestingDepth();
+        if(maxDepth && m_openElements.size() >= maxDepth)
+            return false;
+    }
+
+    m_openElements.push(element);
+    return true;
+}
+
 bool HTMLParser::shouldFosterParent() const
 {
     return m_fosterRedirecting && isFosterRedirectingTag(currentElement()->tagName());
@@ -757,7 +800,8 @@ void HTMLParser::reconstructActiveFormattingElements()
         auto element = m_activeFormattingElements.at(index);
         auto newElement = cloneElement(element);
         insertElement(newElement);
-        m_openElements.push(newElement);
+        if(!pushElement(newElement))
+            break; // At the depth cap (V08): stop reconstructing further rather than growing the stack.
         m_activeFormattingElements.replace(index, newElement);
     }
 }
@@ -962,12 +1006,14 @@ void HTMLParser::insertHTMLBodyElement(const HTMLTokenView& token)
     m_openElements.pushHTMLBodyElement(element);
 }
 
-void HTMLParser::insertHTMLFormElement(const HTMLTokenView& token)
+bool HTMLParser::insertHTMLFormElement(const HTMLTokenView& token)
 {
     auto element = createHTMLElement(token);
     insertElement(element);
-    m_openElements.push(element);
+    if(!pushElement(element))
+        return false;
     m_form = element;
+    return true;
 }
 
 void HTMLParser::insertSelfClosingHTMLElement(const HTMLTokenView& token)
@@ -975,28 +1021,30 @@ void HTMLParser::insertSelfClosingHTMLElement(const HTMLTokenView& token)
     insertElement(createHTMLElement(token));
 }
 
-void HTMLParser::insertHTMLElement(const HTMLTokenView& token)
+bool HTMLParser::insertHTMLElement(const HTMLTokenView& token, bool bounded)
 {
     auto element = createHTMLElement(token);
     insertElement(element);
-    m_openElements.push(element);
+    return pushElement(element, bounded);
 }
 
-void HTMLParser::insertHTMLFormattingElement(const HTMLTokenView& token)
+bool HTMLParser::insertHTMLFormattingElement(const HTMLTokenView& token)
 {
     auto element = createHTMLElement(token);
     insertElement(element);
-    m_openElements.push(element);
+    if(!pushElement(element))
+        return false;
     m_activeFormattingElements.append(element);
+    return true;
 }
 
-void HTMLParser::insertForeignElement(const HTMLTokenView& token, const GlobalString& namespaceURI)
+bool HTMLParser::insertForeignElement(const HTMLTokenView& token, const GlobalString& namespaceURI)
 {
     auto element = createElement(token, namespaceURI);
     insertElement(element);
-    if(!token.selfClosing()) {
-        m_openElements.push(element);
-    }
+    if(token.selfClosing())
+        return true;
+    return pushElement(element);
 }
 
 void HTMLParser::insertTextNode(std::string_view data)
@@ -1215,8 +1263,8 @@ void HTMLParser::handleInHeadMode(HTMLTokenView& token)
         }
 
         if(token.tagName() == noscriptTag) {
-            insertHTMLElement(token);
-            m_insertionMode = InsertionMode::InHeadNoscript;
+            if(insertHTMLElement(token))
+                m_insertionMode = InsertionMode::InHeadNoscript;
             return;
         }
 
@@ -1319,8 +1367,8 @@ void HTMLParser::handleAfterHeadMode(HTMLTokenView& token)
         }
 
         if(token.tagName() == framesetTag) {
-            insertHTMLElement(token);
-            m_insertionMode = InsertionMode::InFrameset;
+            if(insertHTMLElement(token))
+                m_insertionMode = InsertionMode::InFrameset;
             return;
         }
 
@@ -1408,8 +1456,8 @@ void HTMLParser::handleInBodyMode(HTMLTokenView& token)
             if(!m_framesetOk)
                 return;
             m_openElements.removeHTMLBodyElement();
-            insertHTMLElement(token);
-            m_insertionMode = InsertionMode::InFrameset;
+            if(insertHTMLElement(token))
+                m_insertionMode = InsertionMode::InFrameset;
             return;
         }
 
@@ -1595,8 +1643,8 @@ void HTMLParser::handleInBodyMode(HTMLTokenView& token)
             || token.tagName() == marqueeTag
             || token.tagName() == objectTag) {
             reconstructActiveFormattingElements();
-            insertHTMLElement(token);
-            m_activeFormattingElements.appendMarker();
+            if(insertHTMLElement(token))
+                m_activeFormattingElements.appendMarker();
             m_framesetOk = false;
             return;
         }
@@ -1604,9 +1652,9 @@ void HTMLParser::handleInBodyMode(HTMLTokenView& token)
         if(token.tagName() == tableTag) {
             if(!m_inQuirksMode && m_openElements.inButtonScope(pTag))
                 handleFakeEndTagToken(pTag);
-            insertHTMLElement(token);
+            if(insertHTMLElement(token))
+                m_insertionMode = InsertionMode::InTable;
             m_framesetOk = false;
-            m_insertionMode = InsertionMode::InTable;
             return;
         }
 
@@ -1654,7 +1702,7 @@ void HTMLParser::handleInBodyMode(HTMLTokenView& token)
         }
 
         if(token.tagName() == textareaTag) {
-            insertHTMLElement(token);
+            insertHTMLElement(token, false);
             m_skipLeadingNewline = true;
             m_tokenizer.setState(HTMLTokenizer::State::RCDATA);
             m_originalInsertionMode = m_insertionMode;
@@ -1685,19 +1733,20 @@ void HTMLParser::handleInBodyMode(HTMLTokenView& token)
 
         if(token.tagName() == selectTag) {
             reconstructActiveFormattingElements();
-            insertHTMLElement(token);
-            m_framesetOk = false;
-            if(m_insertionMode == InsertionMode::InTable
-                || m_insertionMode == InsertionMode::InCaption
-                || m_insertionMode == InsertionMode::InColumnGroup
-                || m_insertionMode == InsertionMode::InTableBody
-                || m_insertionMode == InsertionMode::InRow
-                || m_insertionMode == InsertionMode::InCell) {
-                m_insertionMode = InsertionMode::InSelectInTable;
-            } else {
-                m_insertionMode = InsertionMode::InSelect;
+            if(insertHTMLElement(token)) {
+                if(m_insertionMode == InsertionMode::InTable
+                    || m_insertionMode == InsertionMode::InCaption
+                    || m_insertionMode == InsertionMode::InColumnGroup
+                    || m_insertionMode == InsertionMode::InTableBody
+                    || m_insertionMode == InsertionMode::InRow
+                    || m_insertionMode == InsertionMode::InCell) {
+                    m_insertionMode = InsertionMode::InSelectInTable;
+                } else {
+                    m_insertionMode = InsertionMode::InSelect;
+                }
             }
 
+            m_framesetOk = false;
             return;
         }
 
@@ -1835,8 +1884,14 @@ void HTMLParser::handleInBodyMode(HTMLTokenView& token)
         if(token.tagName() == pTag) {
             if(!m_openElements.inButtonScope(pTag)) {
                 handleErrorToken(token);
+                // The fake <p> below can be a no-op at the depth cap (V08, see pushElement()): if it
+                // is, inButtonScope(pTag) will still be false on reprocess, sending this same </p> right
+                // back here and recursing forever. Only reprocess if the fake start really pushed
+                // something, so an over-deep, unmatched </p> is dropped instead of looping.
+                auto depthBefore = m_openElements.size();
                 handleFakeStartTagToken(pTag);
-                handleToken(token);
+                if(m_openElements.size() > depthBefore)
+                    handleToken(token);
                 return;
             }
 
@@ -1998,22 +2053,28 @@ void HTMLParser::handleInTableMode(HTMLTokenView& token)
     if(token.type() == HTMLToken::Type::StartTag) {
         if(token.tagName() == captionTag) {
             m_openElements.popUntilTableScopeMarker();
-            m_activeFormattingElements.appendMarker();
-            insertHTMLElement(token);
-            m_insertionMode = InsertionMode::InCaption;
+            if(insertHTMLElement(token)) {
+                m_activeFormattingElements.appendMarker();
+                m_insertionMode = InsertionMode::InCaption;
+            }
             return;
         }
 
         if(token.tagName() == colgroupTag) {
             m_openElements.popUntilTableScopeMarker();
-            insertHTMLElement(token);
-            m_insertionMode = InsertionMode::InColumnGroup;
+            if(insertHTMLElement(token))
+                m_insertionMode = InsertionMode::InColumnGroup;
             return;
         }
 
         if(token.tagName() == colTag) {
+            // The fake <colgroup> below can be a no-op at the depth cap (V08, see pushElement()): if it
+            // is, mode stays InTable and reprocessing would hit this same branch forever. Only
+            // reprocess if it really pushed something, so an over-deep <col> is dropped instead.
+            auto depthBefore = m_openElements.size();
             handleFakeStartTagToken(colgroupTag);
-            handleToken(token);
+            if(m_openElements.size() > depthBefore)
+                handleToken(token);
             return;
         }
 
@@ -2021,16 +2082,20 @@ void HTMLParser::handleInTableMode(HTMLTokenView& token)
             || token.tagName() == tfootTag
             || token.tagName() == theadTag) {
             m_openElements.popUntilTableScopeMarker();
-            insertHTMLElement(token);
-            m_insertionMode = InsertionMode::InTableBody;
+            if(insertHTMLElement(token))
+                m_insertionMode = InsertionMode::InTableBody;
             return;
         }
 
         if(token.tagName() == thTag
             || token.tagName() == tdTag
             || token.tagName() == trTag) {
+            // Same reasoning as the colTag branch above: only reprocess if the fake <tbody> really
+            // pushed something, so an over-deep <tr>/<td>/<th> is dropped instead of looping forever.
+            auto depthBefore = m_openElements.size();
             handleFakeStartTagToken(tbodyTag);
-            handleToken(token);
+            if(m_openElements.size() > depthBefore)
+                handleToken(token);
             return;
         }
 
@@ -2066,8 +2131,8 @@ void HTMLParser::handleInTableMode(HTMLTokenView& token)
             handleErrorToken(token);
             if(m_form != nullptr)
                 return;
-            insertHTMLFormElement(token);
-            m_openElements.pop();
+            if(insertHTMLFormElement(token))
+                m_openElements.pop();
             return;
         }
     } else if(token.type() == HTMLToken::Type::EndTag) {
@@ -2218,16 +2283,21 @@ void HTMLParser::handleInTableBodyMode(HTMLTokenView& token)
     if(token.type() == HTMLToken::Type::StartTag) {
         if(token.tagName() == trTag) {
             m_openElements.popUntilTableBodyScopeMarker();
-            insertHTMLElement(token);
-            m_insertionMode = InsertionMode::InRow;
+            if(insertHTMLElement(token))
+                m_insertionMode = InsertionMode::InRow;
             return;
         }
 
         if(token.tagName() == tdTag
             || token.tagName() == thTag) {
             handleErrorToken(token);
+            // Same reasoning as handleInTableMode's colTag/th-td-tr branches above: only reprocess if
+            // the fake <tr> really pushed something, so an over-deep <td>/<th> is dropped instead of
+            // looping forever once the depth cap (V08) makes it a no-op.
+            auto depthBefore = m_openElements.size();
             handleFakeStartTagToken(trTag);
-            handleToken(token);
+            if(m_openElements.size() > depthBefore)
+                handleToken(token);
             return;
         }
 
@@ -2288,9 +2358,10 @@ void HTMLParser::handleInRowMode(HTMLTokenView& token)
         if(token.tagName() == tdTag
             || token.tagName() == thTag) {
             m_openElements.popUntilTableRowScopeMarker();
-            insertHTMLElement(token);
-            m_insertionMode = InsertionMode::InCell;
-            m_activeFormattingElements.appendMarker();
+            if(insertHTMLElement(token)) {
+                m_insertionMode = InsertionMode::InCell;
+                m_activeFormattingElements.appendMarker();
+            }
             return;
         }
 
@@ -2587,8 +2658,16 @@ void HTMLParser::handleInFramesetMode(HTMLTokenView& token)
         }
     } else if(token.type() == HTMLToken::Type::EndTag) {
         if(token.tagName() == framesetTag) {
-            assert(currentElement()->tagName() != htmlTag);
-            m_openElements.pop();
+            // A nested <frameset> start tag above may have been ignored at the depth cap (V08, see
+            // pushElement()): unlike table/select/..., frameset has no scope check to gate this pop on,
+            // so guard it directly against what is really open, rather than popping unconditionally --
+            // otherwise a spurious end tag for a start tag that was never pushed would pop whatever
+            // real frameset happens to be on top instead.
+            if(currentElement()->tagName() == framesetTag) {
+                assert(currentElement()->tagName() != htmlTag);
+                m_openElements.pop();
+            }
+
             if(currentElement()->tagName() != framesetTag)
                 m_insertionMode = InsertionMode::AfterFrameset;
             return;
@@ -2881,7 +2960,11 @@ void HTMLParser::handleErrorToken(HTMLTokenView& token)
 
 void HTMLParser::handleRCDataToken(HTMLTokenView& token)
 {
-    insertHTMLElement(token);
+    // Exempt from the depth cap (V08, see pushElement()): once the tokenizer switches to RCDATA, it
+    // recognizes nothing but this element's own matching end tag, so it cannot contain a further
+    // nested <title>/<textarea> to chain into unbounded depth. handleTextMode() below unconditionally
+    // pops this element on that end tag (or EOF), so it must always have been genuinely pushed.
+    insertHTMLElement(token, false);
     m_tokenizer.setState(HTMLTokenizer::State::RCDATA);
     m_originalInsertionMode = m_insertionMode;
     m_insertionMode = InsertionMode::Text;
@@ -2889,7 +2972,9 @@ void HTMLParser::handleRCDataToken(HTMLTokenView& token)
 
 void HTMLParser::handleRawTextToken(HTMLTokenView& token)
 {
-    insertHTMLElement(token);
+    // Exempt from the depth cap (V08): same reasoning as handleRCDataToken() above, for
+    // <style>/<noframes>/<xmp>/<iframe>/<noembed>, all of which switch the tokenizer to RAWTEXT.
+    insertHTMLElement(token, false);
     m_tokenizer.setState(HTMLTokenizer::State::RAWTEXT);
     m_originalInsertionMode = m_insertionMode;
     m_insertionMode = InsertionMode::Text;
@@ -2897,7 +2982,8 @@ void HTMLParser::handleRawTextToken(HTMLTokenView& token)
 
 void HTMLParser::handleScriptDataToken(HTMLTokenView& token)
 {
-    insertHTMLElement(token);
+    // Exempt from the depth cap (V08): same reasoning as handleRCDataToken() above, for <script>.
+    insertHTMLElement(token, false);
     m_tokenizer.setState(HTMLTokenizer::State::ScriptData);
     m_originalInsertionMode = m_insertionMode;
     m_insertionMode = InsertionMode::Text;

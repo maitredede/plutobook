@@ -893,12 +893,56 @@ public:
      */
     uint32_t maxUseDepth() const { return m_maxUseDepth; }
 
+    /**
+     * @brief Sets the maximum nesting depth accepted while parsing a document or stylesheet.
+     *
+     * Nothing bounds how deeply CSS token blocks (`((((...`, `[[[[...`), functional pseudo-classes
+     * (`:not(:not(...))`), at-rules (`@media{@media{...}}`), or -- most importantly -- HTML/XML/SVG
+     * element nesting (`<div>` x N) may nest. Each of these is walked by recursive-descent code
+     * (the CSS tokenizer's block matching, the CSS parser's selector-list and at-rule recursion, and
+     * every later pass that walks the DOM by depth: `finishParsingDocument()`, layout, paint,
+     * destruction), so sufficiently deep input exhausts the C++ call stack and crashes the process
+     * (a classic, cheap-to-trigger denial of service).
+     *
+     * This limit is enforced at the point each construct is recognized:
+     * - The CSS tokenizer stops recursing into further nested token blocks once this depth is
+     *   reached, treating the remainder of the over-deep construct as opaque instead of descending
+     *   into it.
+     * - The CSS parser's selector-list recursion (`:is()`/`:not()`/`:has()`/`:where()`) and at-rule
+     *   recursion (nested `@media`, ...) fail gracefully (as a parse error for that construct) once
+     *   this depth is reached, rather than recursing further.
+     * - The HTML tree builder keeps its own open-elements stack exactly as the HTML5 parsing
+     *   algorithm requires (that bookkeeping, not itself a source of unbounded recursion, backs
+     *   invariants later parsing steps rely on), but once this depth is reached, further elements are
+     *   still created and inserted -- so their content is preserved -- as siblings of the element at
+     *   the cap instead of as its descendants, so the DOM itself stops nesting deeper.
+     * - The XML/SVG parser stops descending into further elements the same way, once the same depth
+     *   is reached, by tracking the current element depth in its start/end element handlers.
+     *
+     * Bounding the depth of the parsed DOM this way also bounds every later recursive walk over it
+     * (layout, paint, destruction, ...) to the same depth, without requiring a separate counter in
+     * each of them.
+     *
+     * If not set, the default is 512, comfortably above any depth produced by legitimate documents.
+     * Passing `0` disables the limit -- not recommended for untrusted input.
+     *
+     * @param max The maximum accepted nesting depth, or `0` for no limit.
+     */
+    void setMaxNestingDepth(uint32_t max) { m_maxNestingDepth = max; }
+
+    /**
+     * @brief Returns the maximum nesting depth accepted while parsing a document or stylesheet.
+     * @return The configured depth limit. See `setMaxNestingDepth()`.
+     */
+    uint32_t maxNestingDepth() const { return m_maxNestingDepth; }
+
 private:
     EngineLimits();
 
     uint32_t m_maxTableSpan = 1000;
     uint32_t m_maxUseExpansion = 100000;
     uint32_t m_maxUseDepth = 512;
+    uint32_t m_maxNestingDepth = 512;
 
     friend EngineLimits* engineLimits();
 };

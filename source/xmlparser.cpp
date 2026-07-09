@@ -8,7 +8,7 @@
 
 #include "xmlparser.h"
 #include "xmldocument.h"
-#include "plutobook.h"
+#include "plutobook.hpp"
 
 #include <expat.h>
 
@@ -102,12 +102,31 @@ void XMLParser::handleStartElement(const char* name, const char** attrs)
 
     element->setIsCaseSensitive(true);
     m_currentNode->appendChild(element);
-    m_currentNode = element;
+
+    // Bounds the DOM nesting depth built here against EngineLimits::maxNestingDepth() (V08): expat's
+    // start/end element handlers are not themselves recursive, but every element is appended as a
+    // child of m_currentNode and then descended into unconditionally, so nothing otherwise stops the
+    // resulting DOM from nesting as deep as the input does -- which later, purely recursive passes
+    // (Document::finishParsingDocument(), layout, paint, destruction) must walk by depth. m_depth
+    // tracks the *true* nesting depth symmetrically across every start/end pair (expat guarantees
+    // they are well-formed/balanced), independent of the cap, so handleEndElement() below can tell
+    // whether a given end tag's matching start had descended into its element and undo exactly that.
+    ++m_depth;
+    auto maxDepth = engineLimits()->maxNestingDepth();
+    if(!maxDepth || m_depth <= maxDepth)
+        m_currentNode = element;
+    // Otherwise: element is already in the DOM (appended above), preserving its content, but
+    // m_currentNode is left pointing at the ancestor at the cap, so further elements -- until a
+    // matching end tag brings m_depth back down to the cap -- become its siblings instead of
+    // descendants, flattening the excess nesting rather than growing the tree deeper.
 }
 
 void XMLParser::handleEndElement(const char* name)
 {
-    m_currentNode = m_currentNode->parentNode();
+    auto maxDepth = engineLimits()->maxNestingDepth();
+    if(!maxDepth || m_depth <= maxDepth)
+        m_currentNode = m_currentNode->parentNode();
+    --m_depth;
 }
 
 void XMLParser::handleCharacterData(const char* data, size_t length)

@@ -9,6 +9,7 @@
 #ifndef PLUTOBOOK_XMLPARSER_H
 #define PLUTOBOOK_XMLPARSER_H
 
+#include <cstdint>
 #include <string_view>
 
 namespace plutobook {
@@ -32,6 +33,9 @@ public:
 private:
     XMLDocument* m_document;
     ContainerNode* m_currentNode;
+    // True current element depth, tracked independently of whether m_currentNode actually descended
+    // into each element -- see handleStartElement()/handleEndElement() (V08).
+    uint32_t m_depth{0};
 };
 
 } // namespace plutobook

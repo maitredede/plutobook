@@ -197,10 +197,29 @@ private:
     const GlobalString& defaultNamespace() const { return m_defaultNamespace; }
     const GlobalString& determineNamespace(const GlobalString& prefix) const;
 
+    // RAII guard bounding CSSParser's own semantic recursion -- selector-list nesting through
+    // :is()/:not()/:has()/:where() (consumeSelectorList(), called again from consumePseudoSelector())
+    // and at-rule nesting through @media (consumeRuleList(), called again from consumeMediaRule()) --
+    // against EngineLimits::maxNestingDepth() (V08). This is independent of, and in addition to, the
+    // CSS tokenizer's own recursion guard (csstokenizer.h/.cpp): that one bounds the token-level
+    // bracket matching that finds the extent of a block/function; this one bounds how deep the
+    // parser itself recurses while giving that content semantic meaning, so both layers are covered.
+    class NestingScope {
+    public:
+        explicit NestingScope(CSSParser& parser);
+        ~NestingScope();
+        bool ok() const { return m_ok; }
+
+    private:
+        CSSParser& m_parser;
+        bool m_ok;
+    };
+
     Heap* m_heap;
     const CSSParserContext& m_context;
     std::map<GlobalString, GlobalString> m_namespaces;
     GlobalString m_defaultNamespace = starGlo;
+    uint32_t m_nestingDepth = 0;
 };
 
 } // namespace plutobook

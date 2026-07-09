@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V08 &middot; Unbounded recursion: CSS parsing, layout, paint, destruction</h1>
 <p><span class="badge sev-high">High</span> &nbsp; <span class="muted">Denial of service (stack overflow)</span></p>
 <div class="card">
-<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Status</b> <span class="status-done">fixed</span></div>
 <div class="kv"><b>Key file</b> <code>source/csstokenizer.h:173</code></div>
 </div>
 
@@ -38,12 +38,56 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <ul><li><code>poc/make-deep.py</code></li></ul>
 
 <h2>Proposed fix</h2>
-<p>Shared depth counter (modeled on <code>kMaxImportDepth=256</code>,
- <code>cssstylesheet.cpp:970</code>) applied in <code>consumeComponent</code>/<code>consumeBlock</code>,
- selector/at-rule recursion, parsing (nesting limit), and layout.</p>
+<p>Shared depth counter, checked in <code>CSSTokenStream::consumeComponent</code>
+ (<code>csstokenizer.h</code>/<code>.cpp</code>, thread_local) for token-block recursion
+ (<code>((((&hellip;</code>, <code>:not(:not(&hellip;))</code>); in <code>CSSParser::NestingScope</code>
+ (RAII, member <code>m_nestingDepth</code>) for selector recursion (<code>consumeSelectorList</code>,
+ called back from <code>consumePseudoSelector</code>) and at-rules (<code>consumeRuleList</code>,
+ called back from <code>consumeMediaRule</code>). Past the limit: recursion stops, the construct is
+ treated as a parse error (no crash, no UB).</p>
+ <p>On the tree side: depth is bounded <strong>at parse time</strong>, not in the downstream
+ recursive passes. HTML: an initial fix only bounded the DOM attachment point
+ (<code>currentInsertionParent()</code>), leaving the <code>HTMLElementStack</code>
+ (<code>m_openElements</code>) itself to grow without bound; but this stack is scanned end-to-end by
+ essentially every scope check in the HTML5 algorithm (<code>inScope</code>,
+ <code>inTableScope</code>, <code>inButtonScope</code>, ...), run on every token -- so that first fix
+ removed the stack-overflow crash but not the <code>O(depth)</code> cost of these checks, which
+ stayed quadratic in practice (<code>&lt;div&gt;</code>x200000 no longer crashed but took &gt;60s).
+ The final fix bounds <strong>the stack itself</strong> (<code>HTMLParser::pushElement()</code>):
+ once <code>maxNestingDepth()</code> elements are open, any further opening tag is still created and
+ inserted into the DOM (content preserved, becomes a sibling of the element at the cap rather than a
+ descendant) but is no longer pushed onto the stack -- so the scope checks stay bounded at
+ <code>O(maxNestingDepth)</code> regardless of the total tag count. The insertion-mode transitions
+ that normally accompany a <code>push</code> (entering table/select/frameset/... mode) are gated on
+ that push succeeding, so the state machine never believes it is "inside" an element that isn't
+ actually open -- which would otherwise fail the scope-consistency <code>assert</code>s (e.g. "a
+ td/th is in table scope" in InCell mode). Likewise, the few places where the algorithm inserts an
+ implied tag and then reprocesses the token (e.g. an implied <code>&lt;tbody&gt;</code> before a
+ stray <code>&lt;tr&gt;</code>) only reprocess if that implied insertion actually happened, otherwise
+ the token is dropped instead of looping forever on the same never-pushed implied tag. The
+ <code>&lt;title&gt;/&lt;style&gt;/&lt;script&gt;/&lt;textarea&gt;/&lt;xmp&gt;/&lt;iframe&gt;/&lt;noembed&gt;</code>
+ elements are exempt from the cap: once the tokenizer switches to RCDATA/RAWTEXT/script-data state,
+ it recognizes nothing but their own matching end tag, so they can never nest within themselves to
+ defeat the limit. XML/SVG (same expat handlers): real depth tracked symmetrically in
+ <code>XMLParser::handleStartElement</code>/<code>handleEndElement</code>; <code>m_currentNode</code>
+ only advances/retreats while this depth stays under the cap, with the same fixed-ancestor
+ attachment logic beyond it (no scope stack equivalent to <code>HTMLElementStack</code> to bound on
+ the XML side). Since the resulting DOM's depth is thus bounded, the downstream recursive passes
+ (<code>finishParsingDocument</code>, layout, paint, <code>~Box</code> destruction) are bounded too,
+ with no separate counter needed in each.</p>
 
 <h2>Configuration (default + configurable)</h2>
-<p>Configurable max nesting depth, <strong>default ~512</strong>.</p>
+<p>New <code>EngineLimits::maxNestingDepth</code> limit (<code>setMaxNestingDepth</code> /
+ <code>maxNestingDepth()</code>), <strong>default 512</strong>, <code>0</code> = unlimited. C API
+ <code>plutobook_set_max_nesting_depth(unsigned int)</code>. Verified: <code>&lt;div&gt;</code>x200000
+ goes from &gt;60s (timeout) to ~11s (unoptimized debug build; &lt;1s in a release build), and a
+ lower cap (e.g. 20 via a test harness) stays fast on much deeper input, confirming complexity is
+ now linear. <em>Known limitation, out of scope</em>: beyond the cap, a very deeply nested table
+ (e.g. <code>&lt;table&gt;&lt;tr&gt;&lt;td&gt;</code> repeated 2000 times) no longer crashes or
+ hangs, but can still be very slow -- table <em>layout</em> (intrinsic-width computation for nested
+ tables), not <em>parsing</em>, already has an exponential cost in real nesting depth
+ <strong>even before this fix</strong> (confirmed present on the unmodified base); not fixed here
+ (outside V08's recursion/stack scope -- a candidate for a future table-layout-specific fix).</p>
 
 <footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
 Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
