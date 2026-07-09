@@ -115,7 +115,7 @@ home for V06-V12: **reuse this class verbatim**, do not create a second mechanis
 |--------|----------------|----------|-----------|
 | max `colspan` / `rowspan` / `col span` | 1000 (HTML spec value) | V06 | `maxTableSpan` — **done** |
 | nesting depth (parse/layout/paint/destruction) | 512 | V08 | `maxNestingDepth` (to add) |
-| `<use>` expansion budget (instantiated nodes) + depth | 100,000 nodes / depth 512 | V07 | `maxUseExpansion` (+ depth, to add) |
+| `<use>` expansion budget (instantiated nodes) + depth | 100,000 nodes / depth 512 | V07 | `maxUseExpansion` + `maxUseDepth` — **done** |
 | max `column-count` | 1000 | V12 | `maxColumnCount` (to add) |
 | max page count | 100,000 | V09 | `maxPageCount` (to add) |
 | max counter representation length | 100,000 | V10 | `maxCounterLength` (to add) |

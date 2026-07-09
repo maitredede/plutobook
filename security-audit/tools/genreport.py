@@ -432,7 +432,8 @@ print(f"bomb.svg written: {N} levels -> 2^{N} nodes")
  },
  fix="""<p><code>&lt;use&gt;</code> expansion budget: a cap on the total number of instantiated nodes AND
  on depth (see V08), mirroring the <code>std::set</code> guard used for gradients/patterns.</p>""",
- config="Configurable node budget and expansion depth (sane defaults).",
+ config="Configurable via <code>EngineLimits</code>: <code>setMaxUseExpansion</code> (default 100000 nodes) and <code>setMaxUseDepth</code> (default 512); C API <code>plutobook_set_max_use_expansion</code>/<code>_depth</code>.",
+ status="done",
 )
 
 add(

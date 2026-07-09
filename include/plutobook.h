@@ -726,6 +726,37 @@ PLUTOBOOK_API void plutobook_set_url_validator(plutobook_url_validator_callback_
 PLUTOBOOK_API void plutobook_set_max_table_span(unsigned int max);
 
 /**
+ * @brief Sets the maximum number of DOM nodes an SVG `<use>` element is allowed to instantiate.
+ *
+ * `<use>` clones its target element's subtree and re-descends into the clone, expanding any nested
+ * `<use>` elements it finds. Without a bound on total fan-out, a small "doubling ladder" document
+ * (`N` groups each containing two `<use>` elements referencing the previous group) can instantiate
+ * `2^N` nodes that are never freed, exhausting memory from a tiny input.
+ *
+ * This is a running total shared by every `<use>` element in the document, not a per-`<use>` budget:
+ * once it is reached, further expansion is skipped instead of continuing to clone.
+ *
+ * If not set, the default is 100000. Passing `0` disables the limit -- not recommended for untrusted
+ * input.
+ *
+ * @param max The maximum total number of nodes `<use>` expansion may instantiate, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_use_expansion(unsigned int max);
+
+/**
+ * @brief Sets the maximum recursion depth for SVG `<use>` expansion.
+ *
+ * Complements `plutobook_set_max_use_expansion()`: bounds a `<use>` chain that nests deeply without
+ * fanning out, so it cannot exhaust the C++ call stack before the node budget would otherwise catch it.
+ *
+ * If not set, the default is 512. Passing `0` disables the limit -- not recommended for untrusted
+ * input.
+ *
+ * @param max The maximum `<use>` expansion recursion depth, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_use_depth(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {

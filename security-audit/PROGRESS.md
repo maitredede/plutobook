@@ -16,8 +16,8 @@ finding. One commit per finding (see `FIX-GUIDE.md`).
 | [x] | V03 | Font bytes → FreeType | High | 5009198 |
 | [x] | V04 | Download size | High | 98950eb |
 | [x] | V05 | Image decompression bomb | High | 2806e2d |
-| [x] | V06 | colspan / col span | High | see `git log` (current commit) |
-| [ ] | V07 | SVG `<use>` expansion | High | — |
+| [x] | V06 | colspan / col span | High | c35e686 |
+| [x] | V07 | SVG `<use>` expansion | High | see `git log` |
 | [ ] | V08 | Unbounded recursion | High | — |
 | [ ] | V09 | Page count | Medium+ | — |
 | [ ] | V10 | @counter-style pad / additive | Medium+ | — |

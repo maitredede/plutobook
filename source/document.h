@@ -423,11 +423,31 @@ public:
 
     Rect pageContentRectAt(uint32_t pageIndex) const;
 
+    // Running total of nodes instantiated so far by SVG <use> expansion (see
+    // SVGUseElement::cloneTargetElement / ContainerNode::cloneChildren) and the current expansion
+    // recursion depth, checked against EngineLimits::maxUseExpansion()/maxUseDepth(). Kept on Document
+    // (rather than SVGDocument) because a <use> element may live inside inline SVG parsed as part of an
+    // HTML document, not just a standalone SVGDocument. Plain counters: Document itself does not know
+    // about EngineLimits, the enforcement decision is made at the call sites.
+    uint32_t useExpansionNodeCount() const { return m_useExpansionNodeCount; }
+    void setUseExpansionNodeCount(uint32_t count) { m_useExpansionNodeCount = count; }
+
+    uint32_t useExpansionDepth() const { return m_useExpansionDepth; }
+    void setUseExpansionDepth(uint32_t depth) { m_useExpansionDepth = depth; }
+
+    // Tracks whether the <use> expansion limit warning has already been reported for this document,
+    // so a bomb that is stopped after triggering thousands of skipped clones only logs once.
+    bool useExpansionLimitReported() const { return m_useExpansionLimitReported; }
+    void setUseExpansionLimitReported(bool reported) { m_useExpansionLimitReported = reported; }
+
 private:
     template<typename ResourceType>
     RefPtr<ResourceType> fetchResource(const Url& url);
     float m_containerWidth{0};
     float m_containerHeight{0};
+    uint32_t m_useExpansionNodeCount{0};
+    uint32_t m_useExpansionDepth{0};
+    bool m_useExpansionLimitReported{false};
     Element* m_rootElement{nullptr};
     Book* m_book;
     Heap* m_heap;
