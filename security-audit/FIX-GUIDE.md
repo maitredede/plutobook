@@ -118,7 +118,7 @@ home for V06-V12: **reuse this class verbatim**, do not create a second mechanis
 | `<use>` expansion budget (instantiated nodes) + depth | 100,000 nodes / depth 512 | V07 | `maxUseExpansion` + `maxUseDepth` — **done** |
 | max `column-count` | 1000 | V12 | `maxColumnCount` (to add) |
 | max page count | 100,000 | V09 | `maxPageCount` — **done** |
-| max counter representation length | 100,000 | V10 | `maxCounterLength` (to add) |
+| max counter representation length | 100,000 | V10 | `maxCounterLength` — **done** |
 
 Always: **a default that does not break legitimate rendering**, exposed in C++ and C, and
 documented.

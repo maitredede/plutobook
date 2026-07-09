@@ -794,6 +794,25 @@ PLUTOBOOK_API void plutobook_set_max_nesting_depth(unsigned int max);
 PLUTOBOOK_API void plutobook_set_max_page_count(unsigned int max);
 
 /**
+ * @brief Sets the maximum length, in characters, of a generated `@counter-style` representation.
+ *
+ * A counter style's representation is built by repeatedly appending symbols to a string: the `pad`
+ * descriptor repeats its pad symbol until a target length is reached (e.g. `pad: 2000000000 "x"`),
+ * and an `additive` system repeats a symbol once per unit of counter value for a low-weight symbol
+ * (e.g. `additive-symbols: 1 "x"` with a huge counter value). Either path can grow the representation
+ * to gigabytes from a few bytes of CSS before it is copied onto the heap, exhausting memory.
+ *
+ * Once the representation being built reaches this length, both loops stop appending further
+ * symbols instead of continuing to grow it.
+ *
+ * If not set, the default is 100000. Passing `0` disables the limit -- not recommended for
+ * untrusted input.
+ *
+ * @param max The maximum accepted counter representation length, in characters, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_counter_length(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {

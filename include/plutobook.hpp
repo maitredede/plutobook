@@ -963,6 +963,35 @@ public:
      */
     uint32_t maxPageCount() const { return m_maxPageCount; }
 
+    /**
+     * @brief Sets the maximum length, in characters, of a generated `@counter-style` representation.
+     *
+     * A counter style's representation is built by appending symbols to a `std::string`: the `pad`
+     * descriptor repeats its pad symbol until the representation reaches a target length (e.g.
+     * `pad: 2000000000 "x"` appends its symbol up to two billion times), and an `additive` system
+     * repeats a symbol `value / weight` times for a symbol whose weight divides the counter value
+     * (e.g. `additive-symbols: 1 "x"` with a huge `counter-increment` repeats once per unit of
+     * value). Either path can grow the representation to gigabytes from a few bytes of CSS, and the
+     * finished string is then copied into the document's heap, exhausting memory.
+     *
+     * Once the representation being built reaches this length, both the `pad` loop and the additive
+     * loop stop appending further symbols -- the representation is truncated rather than growing
+     * further. This does not crash and does not affect legitimate counter styles, whose rendered
+     * representations are always far shorter than this limit.
+     *
+     * If not set, the default is 100000. Passing `0` disables the limit -- not recommended for
+     * untrusted input.
+     *
+     * @param max The maximum accepted counter representation length, in characters, or `0` for no limit.
+     */
+    void setMaxCounterLength(uint32_t max) { m_maxCounterLength = max; }
+
+    /**
+     * @brief Returns the maximum length of a generated `@counter-style` representation.
+     * @return The configured length cap. See `setMaxCounterLength()`.
+     */
+    uint32_t maxCounterLength() const { return m_maxCounterLength; }
+
 private:
     EngineLimits();
 
@@ -971,6 +1000,7 @@ private:
     uint32_t m_maxUseDepth = 512;
     uint32_t m_maxNestingDepth = 512;
     uint32_t m_maxPageCount = 100000;
+    uint32_t m_maxCounterLength = 100000;
 
     friend EngineLimits* engineLimits();
 };

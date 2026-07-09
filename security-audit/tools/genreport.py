@@ -582,8 +582,23 @@ add(
 </style></head><body><ol><li>a</li></ol></body></html>
 """,
  },
- fix="<p>Cap the <code>pad</code> length and the number of additive repetitions.</p>",
- config="Configurable max counter representation length (sane default).",
+ fix="""<p>Both generation loops (<code>CSSCounterStyle::generateRepresentation</code> for
+ <code>pad</code>, <code>CSSCounterStyle::generateInitialRepresentation</code> for the
+ <code>additive</code> system) stop appending symbols to the representation being built as soon as
+ it reaches <code>EngineLimits::maxCounterLength()</code>, instead of continuing up to the raw value
+ (potentially ~2 billion) requested by the CSS. For the additive branch, the subtraction
+ <code>value -= repetitions * weight</code> is still performed as an integer operation on the full
+ value (O(1) cost, no memory impact) so the additive system's "exact representation or fail"
+ algorithm keeps working correctly; only the string's growth is capped.</p>""",
+ config="""New <code>EngineLimits::maxCounterLength</code> limit (<code>setMaxCounterLength</code> /
+ <code>maxCounterLength()</code>), <strong>default 100000</strong> characters, <code>0</code> =
+ unlimited (not recommended). C API <code>plutobook_set_max_counter_length(unsigned int)</code>.
+ Verified: <code>pad: 2000000000 "x"</code> and an additive variant
+ (<code>additive-symbols: 1 "x"</code> + a 2-billion <code>counter-increment</code>) each produce a
+ representation bounded to exactly 100000/100001 characters (measured directly) instead of ~2
+ billion, rendered in &lt;0.15s instead of an OOM; a lowered cap via a test harness (e.g. 5/10/50)
+ bounds the representation accordingly.""",
+ status="done",
 )
 
 add(

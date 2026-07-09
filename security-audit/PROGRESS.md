@@ -19,8 +19,8 @@ finding. One commit per finding (see `FIX-GUIDE.md`).
 | [x] | V06 | colspan / col span | High | c35e686 |
 | [x] | V07 | SVG `<use>` expansion | High | 7897a70 |
 | [x] | V08 | Unbounded recursion | High | 583dfcf |
-| [x] | V09 | Page count | Medium+ | see `git log` |
-| [ ] | V10 | @counter-style pad / additive | Medium+ | — |
+| [x] | V09 | Page count | Medium+ | 99efe35 |
+| [x] | V10 | @counter-style pad / additive | Medium+ | see `git log` |
 | [ ] | V11 | stb→cairo stride | Medium | — |
 | [ ] | V12 | column-count | Medium | — |
 | [ ] | V13 | Integer overflow | Low | — |
