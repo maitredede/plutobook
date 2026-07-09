@@ -9,6 +9,7 @@
 #ifndef PLUTOBOOK_CSSTOKENIZER_H
 #define PLUTOBOOK_CSSTOKENIZER_H
 
+#include <algorithm>
 #include <list>
 #include <vector>
 #include <string>
@@ -277,25 +278,47 @@ public:
 
     void advance(size_t count = 1) {
         assert(m_offset + count <= m_length);
-        m_offset += count;
+        // Every caller in this tokenizer only ever advances by a count it just verified via
+        // peek()/isXxxSequence(), so this clamp is a no-op on the paths exercised today; it exists
+        // so a future bug (or an off-by-one in a new consume*Token()) cannot walk m_offset past
+        // m_length, which would otherwise turn a later substring() into an out-of-bounds view under
+        // NDEBUG, where the assert above compiles out.
+        m_offset += std::min(count, m_length - m_offset);
     }
 
     char consume() {
-        auto index = ++m_offset;
-        if(index < m_length)
-            return m_data[index];
-        assert(index == m_length);
+        // Clamp instead of the original unconditional `++m_offset`: at EOF (m_offset == m_length)
+        // that pre-increment used to push m_offset to m_length+1, m_length+2, ... on repeated calls,
+        // silently drifting the offset out of bounds once asserts are compiled out (NDEBUG). Only
+        // advance while there is still something to advance into, so m_offset can never exceed
+        // m_length.
+        if(m_offset < m_length)
+            ++m_offset;
+        if(m_offset < m_length)
+            return m_data[m_offset];
+        assert(m_offset == m_length);
         return char(0);
     }
 
     std::string_view substring(size_t offset, size_t count) const {
         assert(offset + count <= m_length);
+        // Defense-in-depth: clamp so the returned view can never extend past m_data + m_length, even
+        // if offset/count were computed from a drifted or otherwise-invalid offset under NDEBUG. For
+        // every existing call site offset+count <= m_length already holds, so this is a no-op there.
+        offset = std::min(offset, m_length);
+        count = std::min(count, m_length - offset);
         return std::string_view(m_data + offset, count);
     }
 
-    const char& operator*() const {
-        assert(m_offset < m_length);
-        return m_data[m_offset];
+    char operator*() const {
+        // Returns by value (not `const char&`) so the EOF case can hand back a sentinel '\0' the same
+        // way peek()/consume() do, instead of dereferencing m_data[m_offset] unconditionally once the
+        // bounds assert compiles out under NDEBUG. All current callers already only use the result
+        // by value, so this is behavior-preserving for valid input.
+        if(m_offset < m_length)
+            return m_data[m_offset];
+        assert(m_offset == m_length);
+        return char(0);
     }
 
     const char* data() const { return m_data; }

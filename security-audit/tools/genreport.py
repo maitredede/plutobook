@@ -752,6 +752,7 @@ add(
  },
  fix="<p>Replace bounds <code>assert</code>s on hot paths with active checks in release builds; harden the downcasts.</p>",
  config="Robustness fix.",
+ status="done",
 )
 
 add(
