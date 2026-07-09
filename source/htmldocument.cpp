@@ -221,16 +221,26 @@ static std::optional<T> parseHTMLInteger(std::string_view input)
 
     if(input.empty() || !isDigit(input.front()))
         return std::nullopt;
-    T output = 0;
+
+    // Accumulate in the unsigned counterpart of T and saturate at the representable
+    // magnitude instead of letting "output*10+digit" overflow: signed overflow is UB,
+    // and an unclamped unsigned wrap yields nonsensical values further downstream.
+    using UnsignedType = typename std::make_unsigned<T>::type;
+    const UnsignedType limit = isNegative ? static_cast<UnsignedType>(std::numeric_limits<T>::max()) + 1u
+                                           : static_cast<UnsignedType>(std::numeric_limits<T>::max());
+    UnsignedType output = 0;
     do {
-        output = output * 10 + input.front() - '0';
+        UnsignedType digit = static_cast<UnsignedType>(input.front() - '0');
+        if(output > (limit - digit) / 10)
+            output = limit;
+        else
+            output = output * 10 + digit;
         input.remove_prefix(1);
     } while(!input.empty() && isDigit(input.front()));
 
-    using SignedType = typename std::make_signed<T>::type;
     if(isNegative)
-        output = -static_cast<SignedType>(output);
-    return output;
+        return static_cast<T>(static_cast<UnsignedType>(0) - output);
+    return static_cast<T>(output);
 }
 
 static std::optional<unsigned> parseHTMLNonNegativeInteger(std::string_view input)

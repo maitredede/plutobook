@@ -10,6 +10,7 @@
 #include "svgdocument.h"
 #include "boxstyle.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace plutobook {
@@ -126,8 +127,13 @@ static bool parseNumber(std::string_view& input, T& output)
 
         if(input.empty() || !IS_NUM(input.front()))
             return false;
+        // Clamp the exponent accumulator to a sane cap instead of letting "10*exponent+digit"
+        // overflow int (UB) on pathological input; the cap is already far beyond what
+        // std::pow(10, ...) needs to push output outside [-maxValue, maxValue] below.
+        constexpr int kMaxExponent = 1'000'000;
         do {
-            exponent = 10 * exponent + (input.front() - '0');
+            if(exponent < kMaxExponent)
+                exponent = std::min(kMaxExponent, 10 * exponent + (input.front() - '0'));
             input.remove_prefix(1);
         } while(!input.empty() && IS_NUM(input.front()));
     }

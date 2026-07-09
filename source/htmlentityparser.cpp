@@ -2478,9 +2478,14 @@ bool HTMLEntityParser::handleNumber(char cc)
 
 bool HTMLEntityParser::handleDecimal(char cc)
 {
+    // codepoint is unsigned, so "codepoint*10+digit" cannot be UB, but an unbounded
+    // accumulation could in principle wrap back into a value append() treats as valid;
+    // saturate once out of Unicode range (append() already maps anything > 0x10FFFF to
+    // U+FFFD, so freezing here changes nothing for legitimate input).
     uint32_t codepoint = 0;
     do {
-        codepoint = codepoint * 10 + cc - '0';
+        if(codepoint <= 0x10FFFF)
+            codepoint = codepoint * 10 + cc - '0';
         cc = nextInputCharacter();
     } while(isDigit(cc));
     if(cc == ';')
@@ -2498,9 +2503,12 @@ bool HTMLEntityParser::handleMaybeHex(char cc)
 
 bool HTMLEntityParser::handleHex(char cc)
 {
+    // See handleDecimal(): same saturation to avoid wrapping back into a value append()
+    // would otherwise treat as valid.
     uint32_t codepoint = 0;
     do {
-        codepoint = codepoint * 16 + toHexDigit(cc);
+        if(codepoint <= 0x10FFFF)
+            codepoint = codepoint * 16 + toHexDigit(cc);
         cc = nextInputCharacter();
     } while(isHexDigit(cc));
     if(cc == ';')

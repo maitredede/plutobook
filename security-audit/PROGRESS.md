@@ -22,8 +22,8 @@ finding. One commit per finding (see `FIX-GUIDE.md`).
 | [x] | V09 | Page count | Medium+ | 99efe35 |
 | [x] | V10 | @counter-style pad / additive | Medium+ | 37c94d1 |
 | [x] | V11 | stb→cairo stride | Medium | 40ad76d |
-| [x] | V12 | column-count | Medium | see `git log` |
-| [ ] | V13 | Integer overflow | Low | — |
+| [x] | V12 | column-count | Medium | 9821b38 |
+| [x] | V13 | Integer overflow | Low | see `git log` |
 | [ ] | V14 | turbojpeg/webp return values | Low | — |
 | [ ] | V15 | Assert-only bounds (latent) | Low | — |
 | [ ] | V16 | expat billion-laughs | Info | — |

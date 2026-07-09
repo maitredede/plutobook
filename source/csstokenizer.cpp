@@ -10,6 +10,7 @@
 #include "stringutils.h"
 #include "plutobook.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace plutobook {
@@ -312,9 +313,14 @@ CSSToken CSSTokenizer::consumeNumericToken()
             m_input.advance();
         }
 
+        // Clamp the exponent accumulator to a sane cap instead of letting "10*exponent+digit"
+        // overflow int (UB) on pathological input (e.g. "1e99999999999999999999"); the cap is
+        // already far beyond what std::pow(10, ...) needs to saturate a double to +-infinity.
+        constexpr int kMaxExponent = 1'000'000;
         auto cc = m_input.peek();
         do {
-            exponent = 10 * exponent + (cc - '0');
+            if(exponent < kMaxExponent)
+                exponent = std::min(kMaxExponent, 10 * exponent + (cc - '0'));
             cc = m_input.consume();
         } while(isDigit(cc));
     }

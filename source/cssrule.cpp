@@ -843,7 +843,12 @@ std::string CSSCounterStyle::generateRepresentation(int value) const
 {
     if(!rangeContains(value))
         return generateFallbackRepresentation(value);
-    auto initialRepresentation = generateInitialRepresentation(std::abs(value));
+    // std::abs(INT_MIN) is UB (the true magnitude, 2147483648, does not fit in int anyway).
+    // This value can now be reached deterministically (a saturated <li value>/<ol start>, see
+    // V13), so clamp that single edge case instead of overflowing.
+    constexpr auto intMin = std::numeric_limits<int>::min();
+    constexpr auto intMax = std::numeric_limits<int>::max();
+    auto initialRepresentation = generateInitialRepresentation(value == intMin ? intMax : std::abs(value));
     if(initialRepresentation.empty()) {
         return generateFallbackRepresentation(value);
     }

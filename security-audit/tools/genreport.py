@@ -713,6 +713,7 @@ add(
  },
  fix="<p>Checked accumulation + range clamp.</p>",
  config="Robustness fix (no dedicated knob).",
+ status="done",
 )
 
 add(
