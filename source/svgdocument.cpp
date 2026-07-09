@@ -13,6 +13,7 @@
 #include "svgtextbox.h"
 #include "imageresource.h"
 #include "stringutils.h"
+#include "plutobook.hpp"
 
 #include <set>
 
@@ -333,14 +334,34 @@ Box* SVGUseElement::createBox(const RefPtr<BoxStyle>& style)
     return new (heap()) SVGTransformableContainerBox(this, style);
 }
 
+// Reports the EngineLimits::maxUseExpansion()/maxUseDepth() (V07) cutoff once per document, the first
+// time a <use> is left un-expanded because of it.
+static void reportUseExpansionLimitOnce(Document* document)
+{
+    if(document->useExpansionLimitReported())
+        return;
+    document->setUseExpansionLimitReported(true);
+    plutobook_set_error_message("SVG <use> expansion limit reached: stopped expanding <use> elements to bound memory/stack usage");
+}
+
 void SVGUseElement::finishParsingDocument()
 {
-    if(auto targetElement = getTargetElement(document())) {
-        if(auto newElement = cloneTargetElement(targetElement)) {
-            appendChild(newElement);
+    auto doc = document();
+    auto maxDepth = engineLimits()->maxUseDepth();
+    if(maxDepth == 0 || doc->useExpansionDepth() < maxDepth) {
+        doc->setUseExpansionDepth(doc->useExpansionDepth() + 1);
+        if(auto targetElement = getTargetElement(doc)) {
+            if(auto newElement = cloneTargetElement(targetElement)) {
+                appendChild(newElement);
+            }
         }
+
+        SVGElement::finishParsingDocument();
+        doc->setUseExpansionDepth(doc->useExpansionDepth() - 1);
+        return;
     }
 
+    reportUseExpansionLimitOnce(doc);
     SVGElement::finishParsingDocument();
 }
 
@@ -376,6 +397,17 @@ Element* SVGUseElement::cloneTargetElement(SVGElement* targetElement)
 {
     if(targetElement == this || isDisallowedElement(targetElement))
         return nullptr;
+
+    // V07: bound the total number of nodes instantiated by <use> expansion across the whole document
+    // (EngineLimits::maxUseExpansion()), on top of the ancestor-id cycle guard below, which only catches
+    // cycles and does nothing against sibling fan-out (e.g. a "doubling ladder" of nested <use> pairs).
+    auto doc = document();
+    auto maxNodes = engineLimits()->maxUseExpansion();
+    if(maxNodes && doc->useExpansionNodeCount() >= maxNodes) {
+        reportUseExpansionLimitOnce(doc);
+        return nullptr;
+    }
+
     auto parent = parentNode();
     const auto& id = targetElement->id();
     while(parent && parent->isSVGElement()) {
@@ -390,7 +422,8 @@ Element* SVGUseElement::cloneTargetElement(SVGElement* targetElement)
         tagName = svgTag;
     }
 
-    auto newElement = document()->createElement(svgNs, tagName);
+    auto newElement = doc->createElement(svgNs, tagName);
+    doc->setUseExpansionNodeCount(doc->useExpansionNodeCount() + 1);
     newElement->setAttributes(targetElement->attributes());
     if(newElement->tagName() == svgTag) {
         for(const auto& attribute : attributes()) {

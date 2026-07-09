@@ -428,7 +428,8 @@ print(f"bomb.svg ecrit: {N} niveaux -> 2^{N} noeuds")
  },
  fix="""<p>Budget d'expansion <code>&lt;use&gt;</code> : plafond du nombre total de noeuds instancies ET de
  la profondeur (cf. V08), a l'image du garde <code>std::set</code> des gradients/patterns.</p>""",
- config="Budget de noeuds et profondeur d'expansion configurables (defauts sains).",
+ config="Budget configurable via <code>EngineLimits</code> : <code>setMaxUseExpansion</code> (defaut 100000 noeuds) et <code>setMaxUseDepth</code> (defaut 512) ; API C <code>plutobook_set_max_use_expansion</code>/<code>_depth</code>.",
+ status="done",
 )
 
 add(

@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V07 &middot; Expansion exponentielle de SVG &lt;use&gt; (billion laughs)</h1>
 <p><span class="badge sev-high">Haute</span> &nbsp; <span class="muted">Deni de service (memoire/CPU)</span></p>
 <div class="card">
-<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Statut</b> <span class="status-done">corrige</span></div>
 <div class="kv"><b>Fichier cle</b> <code>source/svgdocument.cpp:336-406</code></div>
 </div>
 
@@ -40,7 +40,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
  la profondeur (cf. V08), a l'image du garde <code>std::set</code> des gradients/patterns.</p>
 
 <h2>Configuration (defaut + configurable)</h2>
-<p>Budget de noeuds et profondeur d'expansion configurables (defauts sains).</p>
+<p>Budget configurable via <code>EngineLimits</code> : <code>setMaxUseExpansion</code> (defaut 100000 noeuds) et <code>setMaxUseDepth</code> (defaut 512) ; API C <code>plutobook_set_max_use_expansion</code>/<code>_depth</code>.</p>
 
 <footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
 Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>

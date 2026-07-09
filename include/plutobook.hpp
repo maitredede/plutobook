@@ -843,10 +843,62 @@ public:
      */
     uint32_t maxTableSpan() const { return m_maxTableSpan; }
 
+    /**
+     * @brief Sets the maximum number of DOM nodes an SVG `<use>` element is allowed to instantiate.
+     *
+     * `<use>` clones the subtree of its target element and re-descends into the clone, expanding any
+     * `<use>` elements found inside it. The only cycle guard in place blocks an element from being
+     * re-used by one of its own ancestors (by id); it does not bound fan-out between siblings. A
+     * "doubling ladder" -- `N` groups, each containing two `<use>` elements referencing the previous
+     * group -- turns an `O(N)` document into `O(2^N)` instantiated nodes, all allocated from the
+     * document's bump allocator and never freed, exhausting memory (or hanging) from a tiny input.
+     *
+     * This is a running total shared by every `<use>` element in the document (not a per-`<use>`
+     * budget): once the total number of nodes instantiated by `<use>` expansion reaches this limit,
+     * further expansion is skipped (the offending `<use>` is left without its cloned content) instead
+     * of continuing to clone. This does not crash and does not affect documents that use `<use>`
+     * normally, since legitimate icon/symbol reuse instantiates only a handful of nodes per use.
+     *
+     * If not set, the default is 100000. Passing `0` disables the limit -- not recommended for
+     * untrusted input.
+     *
+     * @param max The maximum total number of nodes `<use>` expansion may instantiate, or `0` for no limit.
+     */
+    void setMaxUseExpansion(uint32_t max) { m_maxUseExpansion = max; }
+
+    /**
+     * @brief Returns the maximum number of nodes SVG `<use>` expansion may instantiate.
+     * @return The configured node budget. See `setMaxUseExpansion()`.
+     */
+    uint32_t maxUseExpansion() const { return m_maxUseExpansion; }
+
+    /**
+     * @brief Sets the maximum recursion depth for SVG `<use>` expansion.
+     *
+     * In addition to the total node budget (`setMaxUseExpansion()`), a `<use>` chain that nests
+     * deeply without fanning out (e.g. `use` A referencing `use` B referencing `use` C, ...) recurses
+     * once per level through `finishParsingDocument()`. This bounds that recursion so a long chain
+     * cannot exhaust the C++ call stack before the node budget would otherwise catch it.
+     *
+     * If not set, the default is 512. Passing `0` disables the limit -- not recommended for untrusted
+     * input.
+     *
+     * @param max The maximum `<use>` expansion recursion depth, or `0` for no limit.
+     */
+    void setMaxUseDepth(uint32_t max) { m_maxUseDepth = max; }
+
+    /**
+     * @brief Returns the maximum recursion depth for SVG `<use>` expansion.
+     * @return The configured depth limit. See `setMaxUseDepth()`.
+     */
+    uint32_t maxUseDepth() const { return m_maxUseDepth; }
+
 private:
     EngineLimits();
 
     uint32_t m_maxTableSpan = 1000;
+    uint32_t m_maxUseExpansion = 100000;
+    uint32_t m_maxUseDepth = 512;
 
     friend EngineLimits* engineLimits();
 };

@@ -233,10 +233,22 @@ void ContainerNode::reparentChildren(ContainerNode* newParent)
     }
 }
 
+// cloneNode()/cloneChildren() are only ever used to expand SVG <use> elements (see
+// SVGUseElement::cloneTargetElement), so this is where the EngineLimits::maxUseExpansion() node budget
+// (V07) is enforced: each child clone is counted against the document-wide running total before it is
+// created, and cloning stops (leaving any remaining children un-cloned) once the budget is exhausted.
+// Checking per child, at every recursion level (a container's own children are cloned by its own,
+// separately-checked, call to cloneChildren()), bounds the overshoot to a small constant rather than
+// letting one call clone an entire already-large subtree in one uncounted step.
 void ContainerNode::cloneChildren(ContainerNode* newParent)
 {
+    auto document = newParent->document();
+    auto maxNodes = engineLimits()->maxUseExpansion();
     auto child = m_firstChild;
     while(child) {
+        if(maxNodes && document->useExpansionNodeCount() >= maxNodes)
+            break;
+        document->setUseExpansionNodeCount(document->useExpansionNodeCount() + 1);
         newParent->appendChild(child->cloneNode(true));
         child = child->nextSibling();
     }
