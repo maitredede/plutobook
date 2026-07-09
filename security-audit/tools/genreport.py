@@ -22,11 +22,21 @@ def esc(s): return html.escape(s, quote=False)
 # ---------------------------------------------------------------------------
 # Finding data (order = decreasing criticality = commit order)
 # ---------------------------------------------------------------------------
+# Fix commit hash per finding (filled in once the fix has shipped).
+FIXCOMMITS = {
+    "V01": "acb32e3", "V02": "080c0ea", "V03": "5009198", "V04": "98950eb",
+    "V05": "2806e2d", "V06": "c35e686", "V07": "7897a70", "V08": "583dfcf",
+    "V09": "99efe35", "V10": "37c94d1", "V11": "40ad76d", "V12": "9821b38",
+    "V13": "bb826f2", "V14": "2945ca0", "V15": "086414c", "V16": "371a78a",
+}
+
 F = []
 def add(**k):
-    # status: "todo" (needs fixing) or "done" (fixed). fixcommit: optional hash.
+    # status: "todo" (needs fixing) or "done" (fixed). fixcommit: commit hash.
     k.setdefault("status", "todo")
     k.setdefault("fixcommit", "")
+    if not k["fixcommit"] and k.get("id") in FIXCOMMITS:
+        k["fixcommit"] = FIXCOMMITS[k["id"]]
     F.append(k)
 
 def status_html(f):

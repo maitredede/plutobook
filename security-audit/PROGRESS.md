@@ -26,10 +26,33 @@ finding. One commit per finding (see `FIX-GUIDE.md`).
 | [x] | V13 | Integer overflow | Low | bb826f2 |
 | [x] | V14 | turbojpeg/webp return values | Low | 2945ca0 |
 | [x] | V15 | Assert-only bounds (latent) | Low | 086414c |
-| [x] | V16 | expat billion-laughs | Info | (see current commit) |
+| [x] | V16 | expat billion-laughs | Info | 371a78a |
+
+**16/16 fixed.** Clean rebuild from scratch OK; PoC suite replayed against the integrated state
+(everything bounded/rejected, no crash/hang/OOM).
+
+## Follow-up — issues discovered while fixing (outside the scope of the 16)
+
+Found while verifying the fixes; **not fixed** (distinct from the 16 findings), to be addressed
+separately:
+
+- **Deeply nested table layout**: exponential intrinsic-width computation time beyond ~80-100
+  levels (pre-existing, independent of V08). Residual CPU DoS under the depth cap. (found during
+  V08)
+- **`Heap::concatenateString` O(n²)** (`source/heapstring.h`): `TextNode::appendData` recopies the
+  whole accumulated string on every character-data callback, onto the monotonic PMR arena that's
+  never freed → a deep XML entity bomb can trigger `std::bad_alloc` before expat's protection kicks
+  in. (V16)
+- **Superlinear multicolumn balancing** in content size, even at a legitimate `column-count`.
+  Performance issue, distinct from V12. (V12)
+- **Cairo 1.18.4 PDF writer**: corrupted xref/trailer beyond ~65536 pages (Cairo bug, no crash).
+  The `maxPageCount=100000` default exceeds this threshold → consider a default ≤ 65536. (V09)
+- **memcpy on a null `data()`** in `Heap::createString` (`heapstring.h:72`) for an empty
+  `string_view`, reachable via `content: "\` + EOF (UB). (found during V15; the neighboring
+  `std::abs(INT_MIN)` case was fixed in the V13 commit)
 
 ## Notes
 
-- (The initial report commit checks nothing off: every status is "to fix".)
-- For each fix: check the box, fill in the hash, flip `status="done"` in
-  `security-audit/tools/genreport.py`, and regenerate.
+- The first commit (the report) checks nothing off: every status is "to fix".
+- Fixes made by a **Claude Code Sonnet 5** agent, one commit per finding, build+PoC verified.
+- The HTML report's status is driven by `status`/`FIXCOMMITS` in `security-audit/tools/genreport.py`.

@@ -39,7 +39,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-crit">Critical</span></td>
 <td>SSRF / server-side forged request</td>
 <td><code>source/resource/resource.cpp:284</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>acb32e3</code>)</td>
 </tr>
 <tr>
 <td><a href="V02-local-file-read/">V02</a></td>
@@ -47,7 +47,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-crit">Critical</span></td>
 <td>Local file disclosure</td>
 <td><code>source/resource/url.cpp:568-575</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>080c0ea</code>)</td>
 </tr>
 <tr>
 <td><a href="V03-font-freetype/">V03</a></td>
@@ -55,7 +55,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-high">High</span></td>
 <td>RCE surface (font parsing)</td>
 <td><code>source/resource/fontresource.cpp:57</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>5009198</code>)</td>
 </tr>
 <tr>
 <td><a href="V04-download-size/">V04</a></td>
@@ -63,7 +63,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-high">High</span></td>
 <td>Denial of service (memory)</td>
 <td><code>source/resource/resource.cpp:268-273</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>98950eb</code>)</td>
 </tr>
 <tr>
 <td><a href="V05-image-bomb/">V05</a></td>
@@ -71,7 +71,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-high">High</span></td>
 <td>Denial of service (memory)</td>
 <td><code>source/resource/imageresource.cpp:100-193</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>2806e2d</code>)</td>
 </tr>
 <tr>
 <td><a href="V06-table-colspan/">V06</a></td>
@@ -79,7 +79,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-high">High</span></td>
 <td>Denial of service (memory)</td>
 <td><code>source/layout/tablebox.cpp:1389</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>c35e686</code>)</td>
 </tr>
 <tr>
 <td><a href="V07-svg-use/">V07</a></td>
@@ -87,7 +87,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-high">High</span></td>
 <td>Denial of service (memory/CPU)</td>
 <td><code>source/svgdocument.cpp:336-406</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>7897a70</code>)</td>
 </tr>
 <tr>
 <td><a href="V08-recursion/">V08</a></td>
@@ -95,7 +95,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-high">High</span></td>
 <td>Denial of service (stack overflow)</td>
 <td><code>source/csstokenizer.h:173</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>583dfcf</code>)</td>
 </tr>
 <tr>
 <td><a href="V09-page-count/">V09</a></td>
@@ -103,7 +103,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-medhigh">Medium+</span></td>
 <td>Memory DoS + UB</td>
 <td><code>source/layout/pagebox.cpp:694-723</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>99efe35</code>)</td>
 </tr>
 <tr>
 <td><a href="V10-counter-pad/">V10</a></td>
@@ -111,7 +111,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-medhigh">Medium+</span></td>
 <td>Memory DoS</td>
 <td><code>source/cssrule.cpp:855-878</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>37c94d1</code>)</td>
 </tr>
 <tr>
 <td><a href="V11-stb-stride/">V11</a></td>
@@ -119,7 +119,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-med">Medium</span></td>
 <td>Out-of-bounds read</td>
 <td><code>source/resource/imageresource.cpp:169-190</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>40ad76d</code>)</td>
 </tr>
 <tr>
 <td><a href="V12-column-count/">V12</a></td>
@@ -127,7 +127,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-med">Medium</span></td>
 <td>CPU DoS</td>
 <td><code>source/layout/multicolumnbox.cpp:304-313</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>9821b38</code>)</td>
 </tr>
 <tr>
 <td><a href="V13-integer-ub/">V13</a></td>
@@ -135,7 +135,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-low">Low</span></td>
 <td>UB / robustness</td>
 <td><code>source/htmldocument.cpp:224</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>bb826f2</code>)</td>
 </tr>
 <tr>
 <td><a href="V14-decoder-returns/">V14</a></td>
@@ -143,7 +143,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-low">Low</span></td>
 <td>Robustness</td>
 <td><code>source/resource/imageresource.cpp:110-123</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>2945ca0</code>)</td>
 </tr>
 <tr>
 <td><a href="V15-assert-bounds/">V15</a></td>
@@ -151,7 +151,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-low">Low</span></td>
 <td>Robustness (latent)</td>
 <td><code>source/csstokenizer.h:239-286</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>086414c</code>)</td>
 </tr>
 <tr>
 <td><a href="V16-expat-billion-laughs/">V16</a></td>
@@ -159,7 +159,7 @@ is unrecoverable.</p>
 <td><span class="badge sev-info">Info</span></td>
 <td>Info / dependency</td>
 <td><code>meson.build:8-11</code></td>
-<td><span class="status-done">fixed</span></td>
+<td><span class="status-done">fixed</span> (<code>371a78a</code>)</td>
 </tr>
 </tbody>
 </table>
