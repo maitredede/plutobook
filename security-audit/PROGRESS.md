@@ -27,7 +27,7 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`). **Pousser a
 | [x] | V14 | Retours turbojpeg/webp | Basse | 2945ca0 |
 | [x] | V15 | Bornes en assert (latent) | Basse | 086414c |
 | [x] | V16 | expat billion-laughs | Info | 371a78a |
-| [ ] | V17 | memcpy sur `data()` null (chaîne vide) | Basse | — |
+| [x] | V17 | memcpy sur `data()` null (chaîne vide) | Basse | voir git log |
 | [ ] | V18 | Défaut maxPageCount > limite PDF Cairo | Moyenne | — |
 | [ ] | V19 | `Heap::concatenateString` O(n²) | Haute | — |
 | [ ] | V20 | Layout tables imbriquées exponentiel | Haute | — |

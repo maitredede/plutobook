@@ -837,6 +837,7 @@ print("repro.html ecrit (se termine par un backslash + EOF)")
  },
  fix="<p>Ne appeler <code>memcpy</code> que si <code>size &gt; 0</code> (et/ou data non null).</p>",
  config="Correctif de robustesse (pas de knob).",
+ status="done",
 )
 
 add(
