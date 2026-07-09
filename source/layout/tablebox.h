@@ -45,6 +45,9 @@ public:
     std::optional<float> lastLineBaseline() const final;
     std::optional<float> inlineBlockBaseline() const final;
 
+    uint32_t nestingDepth() const { return m_nestingDepth; }
+    bool exceedsMaxNestingDepth() const;
+
     TableColumnList& columns() { return m_columns; }
     const TableColumnList& columns() const { return m_columns; }
 
@@ -89,6 +92,7 @@ private:
     float m_borderVerticalSpacing;
     std::unique_ptr<TableLayoutAlgorithm> m_tableLayout;
     std::unique_ptr<TableCollapsedBorderEdgeList> m_collapsedBorderEdges;
+    uint32_t m_nestingDepth{0};
 };
 
 template<>

@@ -912,13 +912,26 @@ add(
  title="Exponential-cost nested table layout",
  keyfile="source/layout/tablebox.cpp",
  locations=[
-   ("source/layout/tablebox.cpp", "intrinsic/preferred width computation recomputed per level"),
+   ("source/layout/tablebox.cpp", "TableSectionBox::layout() / layoutRows(): full layout of every cell, twice per level"),
+   ("source/layout/tablebox.cpp", "TableBox::build() / exceedsMaxNestingDepth(): nesting depth and circuit breaker"),
+   ("include/plutobook.hpp", "EngineLimits::maxTableNestingDepth"),
  ],
- nature="""<p>The table intrinsic/preferred width computation recomputes the subtree at every
- level; for tables actually nested beyond ~80-100 levels the cost becomes exponential (independent
- of V08's nesting-depth cap, set to 512).</p>""",
- risk="<p><strong>Impact</strong>: CPU hang (DoS) under the depth cap.</p>",
- repro=["Generate poc/make-nested-tables.py (~150 levels) &rarr; render &rarr; hang pre-fix, bounded post-fix."],
+ nature="""<p>Diagnosis confirmed by call counting (temporary instrumentation): the per-box
+ min/max preferred-width cache (<code>BoxFrame::m_minPreferredWidth</code>/<code>m_maxPreferredWidth</code>,
+ invalidated only if &lt; 0) works correctly -- <code>minPreferredWidth()</code>/<code>maxPreferredWidth()</code>
+ are computed only once per box, an <code>O(N)</code> cost measured for <code>N</code> nested tables.
+ The real doubling comes from <strong>layout</strong> (not the width computation): the CSS 2.1 table
+ height algorithm is inherently two passes per table --
+ <code>TableSectionBox::layout()</code> first lays out each cell at its natural (unstretched) height
+ to measure each row's height, then <code>TableSectionBox::layoutRows()</code> lays out
+ <em>every cell again</em> with that row height applied as an override, to stretch cells to the row
+ (needed for <code>vertical-align</code> and percentage-height descendants). Both passes fully lay
+ out the cell's content, including any table nested inside it: a table nested <code>N</code> levels
+ deep is therefore laid out ~<code>2^N</code> times, not <code>N</code> times -- measured: 62,
+ 2046, 65534 cell-layout calls for N=5, 10, 15 (exact formula <code>2^(N+1)-2</code>), independent
+ of V08's general nesting-depth cap (512).</p>""",
+ risk="<p><strong>Impact</strong>: CPU hang (DoS) under the general depth cap.</p>",
+ repro=["Generate poc/make-nested-tables.py (~150 levels) &rarr; render &rarr; hang pre-fix (&gt;20s), ~0.9s post-fix."],
  poc={
   "make-nested-tables.py": """#!/usr/bin/env python3
 # Genuinely nested tables to exercise the intrinsic-width computation.
@@ -928,9 +941,35 @@ open("nested-tables.html","w").write(
 print(f"nested-tables.html written: {N} levels")
 """,
  },
- fix="""<p>Memoize the width computation, or specifically bound table nesting depth (lower than
- the general cap), configurable.</p>""",
- config="Memoization, and/or bounded table nesting depth (sane default, configurable).",
+ fix="""<p>Memoization alone does not fix the problem (the width computation is already cached and
+ linear; the exponential cost comes from <em>layout</em>, not the width computation, and memoizing
+ a full layout -- positions, overflow, fragmentation -- would be far more invasive and risky than a
+ width). Chosen fix (a fallback explicitly documented in this folder as an acceptable alternative):
+ specifically bound <em>table</em> nesting depth (distinct from the general cap of 512).
+ <code>TableBox</code> now knows its depth among its table ancestors
+ (<code>m_nestingDepth</code>, derived in <code>build()</code> -- amortized O(1), since the nearest
+ ancestor already has its own depth computed, as <code>build()</code> walks the tree top-down).
+ Beyond <code>EngineLimits::maxTableNestingDepth()</code>, <code>TableSectionBox::layoutRows()</code>
+ skips the second (stretch) pass for that table's cells: the cell keeps the natural height measured
+ by the first pass -- same content, same width, same position, just not stretched if a sibling cell
+ in the same row is taller. Because this doubling is recursive, the total cost is
+ <code>O(2^limit &times; total_depth)</code>, not just <code>O(2^limit)</code> (each level past the
+ limit re-doubles everything nested above it): the limit must therefore stay low so that
+ <code>2^limit</code> remains a small constant, unlike the other limits in this table where a value
+ around 100 would suffice.</p>""",
+ config="""New <code>EngineLimits::maxTableNestingDepth</code> limit
+ (<code>setMaxTableNestingDepth</code>/<code>maxTableNestingDepth()</code>), <strong>default 8</strong>,
+ <code>0</code> = unlimited (not recommended, cost is genuinely exponential without it). C API
+ <code>plutobook_set_max_table_nesting_depth(unsigned int)</code>. Verified: scaling is now linear
+ (0.19s/0.63s/0.89s/0.98s for 50/100/150/200 levels, vs. a hang/timeout pre-fix around N&asymp;20-25);
+ the 150-level PoC -&gt; ~0.92s, valid PDF (pre-fix: timeout &gt;20s). Non-regression verified by
+ <strong>byte-for-byte PDF comparison</strong> between a pre-fix binary (<code>git stash</code> + a
+ separate build) and post-fix on: a simple grid, colspan/rowspan, 2-level nesting, %/fixed/auto
+ widths, caption (all 5 -- byte-identical); real nesting up to exactly the limit (depth 8,
+ included) -- byte-identical; past the limit (depth 9+), differences appear only when a row
+ contains cells of different natural heights (the shorter one is no longer stretched) -- exactly
+ the documented behavior, no corruption.""",
+ status="done",
 )
 
 add(

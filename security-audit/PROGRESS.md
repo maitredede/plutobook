@@ -30,7 +30,7 @@ finding. One commit per finding (see `FIX-GUIDE.md`). **Push after every commit.
 | [x] | V17 | memcpy on null `data()` (empty string) | Low | see git log |
 | [x] | V18 | maxPageCount default > Cairo PDF limit | Medium | see git log |
 | [x] | V19 | `Heap::concatenateString` O(n²) | High | see git log |
-| [ ] | V20 | Exponential nested table layout | High | — |
+| [x] | V20 | Exponential nested table layout | High | see git log |
 | [ ] | V21 | Superlinear multicolumn balancing | Medium | — |
 
 **V01–V16 fixed** (clean rebuild OK, integrated PoCs verified). **V17–V21** = issues discovered
@@ -56,8 +56,25 @@ while fixing, now tracked and to be handled in order: V17 → V18 → V19 → V2
   materializing into the arena once, on first read (`TextNode::data()`) — O(n) cost instead of
   O(n²), identical text (verified byte-for-byte via `pdftotext`). Additional defense in depth:
   `EngineLimits::maxTextNodeLength` (default 100,000,000 characters, configurable). (V16)
-- **V20** — Deeply nested table layout: exponential intrinsic-width computation cost beyond
-  ~80-100 levels (independent of V08's depth cap). CPU DoS. (V08)
+- **V20** — Deeply nested table layout: exponential cost confirmed by call counting
+  (2^(N+1)-2 cell layouts for N levels), independent of V08's depth cap (512). Diagnosis: **not**
+  the preferred-width computation (already cached per box, O(N) cost measured); the doubling comes
+  from CSS's two-pass-per-table layout (natural-height measurement pass, then a stretch pass to the
+  row height), each pass fully re-laying-out any table nested inside it. Memoizing a full layout
+  (positions/overflow/fragmentation) would have been far more invasive than a width computation —
+  the chosen fallback (documented as an acceptable alternative in the V20 folder): new
+  `EngineLimits::maxTableNestingDepth` limit (default **8**, configurable, 0 = unlimited); beyond
+  it, `TableSectionBox::layoutRows()` skips the stretch pass for that table's cells (same
+  content/width/position, just not stretched against a taller sibling cell — cosmetic only, past
+  the limit). The default must stay low because the cost is
+  O(2^limit &times; total_depth), not just O(2^limit): a default around 100 (a priori reasonable by
+  analogy with the other limits) would remain exponential and insufficient — verified empirically.
+  Verified: scaling is now linear (0.19/0.63/0.89/0.98s for 50/100/150/200 levels, vs. a hang/timeout
+  pre-fix around N≈20-25); the 150-level PoC → ~0.92s (pre-fix: timeout >20s); non-regression via
+  **byte-for-byte PDF comparison** (pre-fix binary via `git stash` + separate build, vs. post-fix)
+  on a simple grid/colspan-rowspan/2-level nesting/%-fixed-auto widths/caption (all identical) and
+  on real nesting up to exactly the limit (depth 8 included, identical); it only differs beyond the
+  limit (depth 9+, and only when a row has cells of different natural heights). (V08)
 - **V21** — Superlinear multicolumn balancing in content size, even at a legitimate
   `column-count`. Performance/CPU DoS, distinct from V12. (V12)
 
