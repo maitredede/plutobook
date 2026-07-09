@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V18 &middot; maxPageCount default beyond the Cairo PDF writer's limit</h1>
 <p><span class="badge sev-med">Medium</span> &nbsp; <span class="muted">Output integrity</span></p>
 <div class="card">
-<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Status</b> <span class="status-done">fixed</span></div>
 <div class="kv"><b>Key file</b> <code>include/plutobook.hpp (EngineLimits::maxPageCount)</code></div>
 </div>
 
@@ -40,7 +40,9 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <p>Lower the <code>maxPageCount</code> default to a value that guarantees a valid Cairo PDF (&le;65536).</p>
 
 <h2>Configuration (default + configurable)</h2>
-<p>Lowered <code>maxPageCount</code> default (e.g. 65535), still configurable via <code>EngineLimits</code>.</p>
+<p><code>maxPageCount</code> default lowered to <b>65533</b> (empirically verified by
+ bisection: 65533 pages -> valid PDF, 65534 -> corrupted PDF, reproducible across several document
+ shapes), still configurable via <code>EngineLimits</code>.</p>
 
 <footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
 Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>

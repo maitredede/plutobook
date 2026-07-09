@@ -28,7 +28,7 @@ finding. One commit per finding (see `FIX-GUIDE.md`). **Push after every commit.
 | [x] | V15 | Assert-only bounds (latent) | Low | 086414c |
 | [x] | V16 | expat billion-laughs | Info | 371a78a |
 | [x] | V17 | memcpy on null `data()` (empty string) | Low | see git log |
-| [ ] | V18 | maxPageCount default > Cairo PDF limit | Medium | — |
+| [x] | V18 | maxPageCount default > Cairo PDF limit | Medium | see git log |
 | [ ] | V19 | `Heap::concatenateString` O(n²) | High | — |
 | [ ] | V20 | Exponential nested table layout | High | — |
 | [ ] | V21 | Superlinear multicolumn balancing | Medium | — |
@@ -41,9 +41,11 @@ while fixing, now tracked and to be handled in order: V17 → V18 → V19 → V2
 - **V17** — memcpy on a null `data()` in `Heap::createString` (`heapstring.h:72`) for an empty
   `string_view`, reachable via `content:"\` + EOF (UB). (found during V15; the neighboring
   `std::abs(INT_MIN)` case had already been fixed in the V13 commit)
-- **V18** — Cairo 1.18.4 PDF writer: corrupted xref/trailer beyond ~65536 pages (Cairo bug, no
-  crash). The `maxPageCount=100000` default (V09) exceeds this threshold → lower the default
-  ≤ 65536. (V09)
+- **V18** — Cairo 1.18.4 PDF writer: beyond 65533 pages in a single PDF surface, the shared object
+  stream for the Catalog/Pages/Info objects overflows its 2-byte index field (max 65536 entries) →
+  corrupted xref/trailer (Cairo bug, no crash; empirically verified by bisection: 65533 pages =
+  valid PDF, 65534 = invalid, reproduced across several document shapes). The `maxPageCount=100000`
+  default (V09) exceeded this threshold → default lowered to **65533**. (V09)
 - **V19** — `Heap::concatenateString` O(n²) (`source/heapstring.h`): `TextNode::appendData`
   recopies the whole accumulated string on every character-data callback, onto the monotonic PMR
   arena that's never freed → a deep XML entity bomb can trigger `std::bad_alloc` before expat's

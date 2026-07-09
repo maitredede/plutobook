@@ -950,8 +950,23 @@ public:
      * are built, and the `pages` counter (used by `counter(pages)` in page margin content, e.g. "Page
      * X of Y") reflects the clamped count rather than the unbounded one.
      *
-     * If not set, the default is 100000, comfortably above any page count produced by legitimate
-     * documents. Passing `0` disables the limit -- not recommended for untrusted input.
+     * The default also has to stay clear of a Cairo PDF-surface limitation: the bundled Cairo
+     * (1.18.4)'s PDF writer groups the page/pages-tree objects of a single PDF surface into one
+     * compressed object stream, indexed by a 2-byte field in the cross-reference stream (max 65536
+     * distinct slots). Once that stream holds more than 65536 objects -- empirically, once the page
+     * count reaches 65534 (page objects plus a handful of shared Catalog/Pages/Info objects sharing
+     * the same stream) -- indices collide and the resulting PDF's catalog/page tree cannot be
+     * resolved: poppler reports "Couldn't find trailer dictionary" / "Catalog object is wrong type"
+     * and refuses to open it. No crash, but the whole file is unreadable garbage. This was verified
+     * empirically (bisection confirmed 65533 pages produces a valid PDF and 65534 an invalid one,
+     * reproducible across documents of varying per-page complexity) rather than assumed from Cairo's
+     * documentation.
+     *
+     * If not set, the default is 65533 -- the empirically-verified maximum page count that still
+     * yields a valid PDF with the bundled Cairo, and comfortably above any page count produced by
+     * legitimate documents. Passing `0` disables the limit -- not recommended for untrusted input,
+     * and raising this default risks invalid PDF output with the bundled Cairo if the cap is ever
+     * actually reached.
      *
      * @param max The maximum accepted page count, or `0` for no limit.
      */
@@ -1023,7 +1038,7 @@ private:
     uint32_t m_maxUseExpansion = 100000;
     uint32_t m_maxUseDepth = 512;
     uint32_t m_maxNestingDepth = 512;
-    uint32_t m_maxPageCount = 100000;
+    uint32_t m_maxPageCount = 65533;
     uint32_t m_maxCounterLength = 100000;
     uint32_t m_maxColumnCount = 1000;
 
