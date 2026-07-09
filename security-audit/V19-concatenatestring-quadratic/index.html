@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V19 - Heap::concatenateString O(n²) on text accumulation</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V19 &middot; Heap::concatenateString O(n²) on text accumulation</h1>
+<p><span class="badge sev-high">High</span> &nbsp; <span class="muted">Denial of service (memory)</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/heapstring.h</code></div>
+</div>
+
+<h2>Nature</h2>
+<p><code>TextNode::appendData</code> recopies the entire accumulated string on every
+ character-data callback, into the monotonic PMR arena (never freed). O(n&sup2;) growth in both
+ time and memory. A deep XML entity bomb (or a large, fragmented text node) triggers a
+ <code>std::bad_alloc</code> <em>before</em> even expat's amplification protection (V16) kicks
+ in.</p>
+
+<h2>Location</h2>
+<ul><li><code>source/heapstring.h</code> &mdash; Heap::concatenateString: recopies the whole string on every call</li><li><code>source/document.cpp</code> &mdash; TextNode::appendData calls concatenateString on every character-data callback</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><strong>Impact</strong>: memory exhaustion (DoS) from a small XML document.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Generate poc/make-entity-bomb.py (deep entities) &rarr; render &rarr; bad_alloc pre-fix, bounded post-fix.</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/make-entity-bomb.py</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Avoid the O(n&sup2;) recopy (efficient text accumulation) and/or cap the accumulated
+ length of a text node (sane default, configurable).</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Bounded accumulated text length (sane default, configurable) and/or non-quadratic accumulation.</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

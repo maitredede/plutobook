@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V18 - maxPageCount default beyond the Cairo PDF writer&#x27;s limit</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V18 &middot; maxPageCount default beyond the Cairo PDF writer's limit</h1>
+<p><span class="badge sev-med">Medium</span> &nbsp; <span class="muted">Output integrity</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>include/plutobook.hpp (EngineLimits::maxPageCount)</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>Cairo 1.18.4's PDF writer corrupts the xref table / trailer beyond roughly 65536
+ pages in a single document (a Cairo bug, no crash). The <code>maxPageCount = 100000</code> default
+ introduced in V09 exceeds this threshold: a document that reaches the cap produces a corrupted
+ (but harmless) PDF.</p>
+
+<h2>Location</h2>
+<ul><li><code>include/plutobook.hpp</code> &mdash; EngineLimits::m_maxPageCount = 100000 (V09)</li><li><code>subprojects/cairo (1.18.4)</code> &mdash; PDF writer: corrupted xref/trailer beyond ~65536 pages</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><strong>Impact</strong>: output integrity (unreadable PDF). No crash/OOM.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Render to PDF a document exceeding 65536 pages with the default &rarr; invalid PDF (pdfinfo/poppler).</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/note.md</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Lower the <code>maxPageCount</code> default to a value that guarantees a valid Cairo PDF (&le;65536).</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Lowered <code>maxPageCount</code> default (e.g. 65535), still configurable via <code>EngineLimits</code>.</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

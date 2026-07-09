@@ -12,9 +12,9 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 </head><body><div class="wrap">
 <button class="toggle" id="tg">theme</button>
 <h1>PlutoBook &mdash; Security Audit Report</h1>
-<p class="lead">Red-team audit of the HTML/XML/CSS/SVG &rarr; PDF rendering engine. 16 findings,
+<p class="lead">Red-team audit of the HTML/XML/CSS/SVG &rarr; PDF rendering engine. 21 findings,
 ranked by severity.</p>
-<p><span class="badge sev-crit">2 Critical</span> &middot; <span class="badge sev-high">6 High</span> &middot; <span class="badge sev-medhigh">2 Medium+</span> &middot; <span class="badge sev-med">2 Medium</span> &middot; <span class="badge sev-low">3 Low</span> &middot; <span class="badge sev-info">1 Info</span></p>
+<p><span class="badge sev-crit">2 Critical</span> &middot; <span class="badge sev-high">8 High</span> &middot; <span class="badge sev-medhigh">2 Medium+</span> &middot; <span class="badge sev-med">4 Medium</span> &middot; <span class="badge sev-low">4 Low</span> &middot; <span class="badge sev-info">1 Info</span></p>
 
 <div class="card">
 <h3 style="margin-top:0">Executive summary</h3>
@@ -98,6 +98,22 @@ is unrecoverable.</p>
 <td><span class="status-done">fixed</span> (<code>583dfcf</code>)</td>
 </tr>
 <tr>
+<td><a href="V19-concatenatestring-quadratic/">V19</a></td>
+<td><a href="V19-concatenatestring-quadratic/">Heap::concatenateString O(n²) on text accumulation</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>Denial of service (memory)</td>
+<td><code>source/heapstring.h</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V20-nested-table-layout/">V20</a></td>
+<td><a href="V20-nested-table-layout/">Exponential-cost nested table layout</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>Denial of service (CPU)</td>
+<td><code>source/layout/tablebox.cpp</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
 <td><a href="V09-page-count/">V09</a></td>
 <td><a href="V09-page-count/">Page count proportional to height + float&rarr;uint UB</a></td>
 <td><span class="badge sev-medhigh">Medium+</span></td>
@@ -130,6 +146,22 @@ is unrecoverable.</p>
 <td><span class="status-done">fixed</span> (<code>9821b38</code>)</td>
 </tr>
 <tr>
+<td><a href="V18-cairo-pagecount-default/">V18</a></td>
+<td><a href="V18-cairo-pagecount-default/">maxPageCount default beyond the Cairo PDF writer's limit</a></td>
+<td><span class="badge sev-med">Medium</span></td>
+<td>Output integrity</td>
+<td><code>include/plutobook.hpp (EngineLimits::maxPageCount)</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
+<td><a href="V21-multicolumn-balancing/">V21</a></td>
+<td><a href="V21-multicolumn-balancing/">Superlinear multicolumn balancing in content size</a></td>
+<td><span class="badge sev-med">Medium</span></td>
+<td>Denial of service (CPU)</td>
+<td><code>source/layout/multicolumnbox.cpp</code></td>
+<td><span class="status-todo">open</span></td>
+</tr>
+<tr>
 <td><a href="V13-integer-ub/">V13</a></td>
 <td><a href="V13-integer-ub/">Integer overflow in numeric parsing</a></td>
 <td><span class="badge sev-low">Low</span></td>
@@ -152,6 +184,14 @@ is unrecoverable.</p>
 <td>Robustness (latent)</td>
 <td><code>source/csstokenizer.h:239-286</code></td>
 <td><span class="status-done">fixed</span> (<code>086414c</code>)</td>
+</tr>
+<tr>
+<td><a href="V17-heapstring-memcpy-null/">V17</a></td>
+<td><a href="V17-heapstring-memcpy-null/">memcpy on a null pointer for an empty string</a></td>
+<td><span class="badge sev-low">Low</span></td>
+<td>UB / robustness</td>
+<td><code>source/heapstring.h:72</code></td>
+<td><span class="status-todo">open</span></td>
 </tr>
 <tr>
 <td><a href="V16-expat-billion-laughs/">V16</a></td>
