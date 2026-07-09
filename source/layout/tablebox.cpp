@@ -10,6 +10,7 @@
 #include "borderpainter.h"
 #include "fragmentbuilder.h"
 #include "boxview.h"
+#include "plutobook.hpp"
 
 #include <span>
 #include <ranges>
@@ -408,8 +409,25 @@ void TableBox::layout(FragmentBuilder* fragmentainer)
     updateOverflowRect();
 }
 
+bool TableBox::exceedsMaxNestingDepth() const
+{
+    auto maxDepth = engineLimits()->maxTableNestingDepth();
+    return maxDepth > 0 && m_nestingDepth > maxDepth;
+}
+
 void TableBox::build()
 {
+    // Depth of this table among its ancestor tables (0 for a table with no enclosing table). Cheap
+    // to derive here: build() runs top-down over the already-linked box tree (see Box::build()), so
+    // any enclosing TableBox has already had this same computation performed by the time we get
+    // here, and the walk below only has to reach the nearest one, not the document root.
+    for(auto box = parentBox(); box; box = box->parentBox()) {
+        if(auto ancestorTable = to<TableBox>(box)) {
+            m_nestingDepth = ancestorTable->nestingDepth() + 1;
+            break;
+        }
+    }
+
     TableSectionBox* headerSection = nullptr;
     TableSectionBox* footerSection = nullptr;
     for(auto child = firstChild(); child; child = child->nextSibling()) {
@@ -1180,6 +1198,7 @@ void TableSectionBox::layoutRows(FragmentBuilder* fragmentainer, float headerHei
 {
     float rowTop = 0;
     auto verticalSpacing = table()->borderVerticalSpacing();
+    auto skipRestretch = table()->exceedsMaxNestingDepth();
     for(size_t rowIndex = 0; rowIndex < m_rows.size(); ++rowIndex) {
         auto rowBox = m_rows[rowIndex];
         if(fragmentainer) {
@@ -1232,8 +1251,17 @@ void TableSectionBox::layoutRows(FragmentBuilder* fragmentainer, float headerHei
             }
 
             cellBox->setY(0.f);
-            cellBox->setOverrideHeight(rowHeight);
-            cellBox->layout(fragmentainer);
+            if(!skipRestretch) {
+                // Second full layout of the cell's content (the first ran just above in
+                // TableSectionBox::layout(), to measure each cell's natural height and derive the
+                // row height). Re-laying it out with the row's final height set as an override
+                // stretches the cell to fill the row (needed for correct vertical-align and for any
+                // percentage-height descendants). See exceedsMaxNestingDepth() for why this doubling
+                // is skipped for pathologically deep table nesting.
+                cellBox->setOverrideHeight(rowHeight);
+                cellBox->layout(fragmentainer);
+            }
+
             if(fragmentainer && cellBox->height() > rowHeight) {
                 rowHeightIncreaseForFragmentation = std::max(rowHeightIncreaseForFragmentation, cellBox->height() - rowHeight);
                 cellBox->setHeight(rowHeight);

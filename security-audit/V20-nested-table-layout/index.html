@@ -15,32 +15,69 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V20 &middot; Layout de tables imbriquees a cout exponentiel</h1>
 <p><span class="badge sev-high">Haute</span> &nbsp; <span class="muted">Deni de service (CPU)</span></p>
 <div class="card">
-<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Statut</b> <span class="status-done">corrige</span></div>
 <div class="kv"><b>Fichier cle</b> <code>source/layout/tablebox.cpp</code></div>
 </div>
 
 <h2>Nature</h2>
-<p>Le calcul des largeurs intrinseques/preferees des tables recalcule le sous-arbre a chaque
- niveau ; pour des tables reellement imbriquees au-dela de ~80-100 niveaux le cout devient exponentiel
- (independant du cap de profondeur d'imbrication de V08, fixe a 512).</p>
+<p>Diagnostic confirme par comptage d'appels (instrumentation temporaire) : le cache de largeur
+ preferee min/max par boite (<code>BoxFrame::m_minPreferredWidth</code>/<code>m_maxPreferredWidth</code>,
+ invalide seulement si &lt; 0) fonctionne correctement -- <code>minPreferredWidth()</code>/<code>maxPreferredWidth()</code>
+ ne sont calcules qu'une fois par boite, cout <code>O(N)</code> mesure pour <code>N</code> tables
+ imbriquees. Le veritable doublement vient du <strong>layout</strong> (pas du calcul de largeur) : l'algorithme
+ de hauteur de table CSS 2.1 est intrinsequement a deux passes par table --
+ <code>TableSectionBox::layout()</code> relaie d'abord chaque cellule a sa hauteur naturelle (non etiree)
+ pour mesurer la hauteur de chaque ligne, puis <code>TableSectionBox::layoutRows()</code> relaie
+ <em>a nouveau</em> chaque cellule avec cette hauteur de ligne appliquee en override, pour etirer les
+ cellules a la ligne (necessaire pour <code>vertical-align</code> et les descendants en hauteur
+ pourcentage). Les deux passes relaient integralement le contenu de la cellule, y compris une table
+ imbriquee a l'interieur : une table imbriquee sur <code>N</code> niveaux est donc laid out ~<code>2^N</code>
+ fois, pas <code>N</code> fois -- mesure : 62, 2046, 65534 appels de layout de cellule pour N=5, 10, 15
+ (formule exacte <code>2^(N+1)-2</code>), independant du cap de profondeur d'imbrication generale de V08
+ (512).</p>
 
 <h2>Localisation</h2>
-<ul><li><code>source/layout/tablebox.cpp</code> &mdash; calcul de largeur intrinseque/preferee recalcule par niveau</li></ul>
+<ul><li><code>source/layout/tablebox.cpp</code> &mdash; TableSectionBox::layout() / layoutRows(): layout complet de chaque cellule, deux fois par niveau</li><li><code>source/layout/tablebox.cpp</code> &mdash; TableBox::build() / exceedsMaxNestingDepth(): profondeur d'imbrication et coupe-circuit</li><li><code>include/plutobook.hpp</code> &mdash; EngineLimits::maxTableNestingDepth</li></ul>
 
 <h2>Risque &amp; impact</h2>
-<p><strong>Impact</strong> : hang CPU (DoS) sous le cap de profondeur.</p>
+<p><strong>Impact</strong> : hang CPU (DoS) sous le cap de profondeur general.</p>
 
 <h2>Reproduction</h2>
-<ol class="steps"><li>Generer poc/make-nested-tables.py (~150 niveaux) &rarr; rendre &rarr; hang pre-fix, borne post-fix.</li></ol>
+<ol class="steps"><li>Generer poc/make-nested-tables.py (~150 niveaux) &rarr; rendre &rarr; hang pre-fix (&gt;20s), ~0.9s post-fix.</li></ol>
 <p class="muted">Fichiers d'exemple :</p>
 <ul><li><code>poc/make-nested-tables.py</code></li></ul>
 
 <h2>Correctif propose</h2>
-<p>Memoiser le calcul de largeur, ou borner specifiquement la profondeur d'imbrication de tables
- (plus basse que le cap general), configurable.</p>
+<p>La memoisation seule ne corrige pas le probleme (le calcul de largeur est deja mis en cache et
+ lineaire ; le cout exponentiel vient du <em>layout</em>, pas du calcul de largeur, et memoiser un layout
+ complet -- positions, overflow, fragmentation -- serait bien plus invasif et risque qu'une largeur).
+ Correctif choisi (repli explicitement documente dans ce dossier comme alternative acceptable) : borner
+ specifiquement la profondeur d'imbrication des <em>tables</em> (distincte du cap general de 512).
+ <code>TableBox</code> connait desormais sa profondeur parmi ses ancetres tables
+ (<code>m_nestingDepth</code>, derivee dans <code>build()</code> -- O(1) amorti, l'ancetre le plus proche a
+ deja sa propre profondeur calculee puisque <code>build()</code> parcourt l'arbre du haut vers le bas).
+ Au-dela de <code>EngineLimits::maxTableNestingDepth()</code>, <code>TableSectionBox::layoutRows()</code>
+ saute la seconde passe (etirement) pour les cellules de cette table : la cellule garde la hauteur
+ naturelle mesuree par la premiere passe -- meme contenu, meme largeur, meme position, simplement pas
+ etiree si une cellule voisine de la meme ligne est plus haute. Ce doublement recursif fait que le cout
+ total est <code>O(2^limite &times; profondeur_totale)</code> et pas seulement <code>O(2^limite)</code>
+ (chaque niveau au-dela de la limite dedouble a nouveau tout ce qui est imbrique au-dessus) : la limite
+ doit donc rester basse pour que <code>2^limite</code> reste une petite constante, contrairement aux
+ autres limites de ce tableau ou une valeur de l'ordre de 100 suffirait.</p>
 
 <h2>Configuration (defaut + configurable)</h2>
-<p>Memoisation, et/ou profondeur d'imbrication de tables bornee (defaut sain, configurable).</p>
+<p>Nouvelle limite <code>EngineLimits::maxTableNestingDepth</code>
+ (<code>setMaxTableNestingDepth</code>/<code>maxTableNestingDepth()</code>), <strong>defaut 8</strong>,
+ <code>0</code> = illimite (non recommande, cout reellement exponentiel sans elle). API C
+ <code>plutobook_set_max_table_nesting_depth(unsigned int)</code>. Verifie : mise a l'echelle desormais
+ lineaire (0.19s/0.63s/0.89s/0.98s pour 50/100/150/200 niveaux, contre hang/timeout pre-fix des N&asymp;20-25) ;
+ PoC 150 niveaux -&gt; ~0.92s, PDF valide (pre-fix : timeout &gt;20s). Non-regression verifiee par
+ <strong>comparaison PDF octet-par-octet</strong> entre binaire pre-fix (<code>git stash</code> + build
+ separe) et post-fix sur : grille simple, colspan/rowspan, imbrication a 2 niveaux, largeurs %/fixe/auto,
+ caption (les 5 -- identiques au byte pres) ; imbrication reelle jusqu'a exactement la limite (profondeur
+ 8, incluse) -- identique au byte pres ; au-dela de la limite (profondeur 9+), differences observees
+ uniquement quand une ligne contient des cellules de hauteurs naturelles differentes (la plus courte
+ n'est plus etiree) -- comportement exactement documente, pas de corruption.</p>
 
 <footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
 Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>

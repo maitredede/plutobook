@@ -1063,6 +1063,51 @@ public:
      */
     uint32_t maxTextNodeLength() const { return m_maxTextNodeLength; }
 
+    /**
+     * @brief Sets the maximum depth to which tables are allowed to genuinely nest (a table inside a
+     * cell inside a table inside a cell, ...).
+     *
+     * CSS table layout is inherently a two-pass algorithm per table: `TableSectionBox::layout()`
+     * first lays out every cell at its natural (unstretched) height to measure each row's required
+     * height, then `TableSectionBox::layoutRows()` lays out every cell a second time with that row
+     * height applied as an override, so cells are stretched to fill the row (needed for correct
+     * `vertical-align` and for percentage-height descendants). Both passes fully lay out each cell's
+     * content -- including any table nested inside it -- so a table nested `N` levels deep inside
+     * `<td>` elements is laid out roughly `2^N` times, not `N` times: `minPreferredWidth()` /
+     * `maxPreferredWidth()` are cached per box and so cost only `O(N)` regardless of nesting, but
+     * this layout doubling is not a cache that can simply be fixed -- both passes are genuinely
+     * needed at every level for correct rendering. A document with a few hundred genuinely nested
+     * `<table><tr><td>` levels (independent of, and well under, `setMaxNestingDepth()`'s general DOM
+     * depth cap) therefore hangs the CPU from a tiny input.
+     *
+     * Once a table's nesting depth exceeds this limit, its cells skip the second (stretch) layout
+     * pass and keep the natural height measured by the first one: the content still renders, at
+     * exactly the same width and position, but is not stretched to fill the row when a sibling cell
+     * in the same row is taller. This only changes rendering for tables nested deeper than the limit,
+     * which is far beyond anything a legitimate document produces. Because every level at or above
+     * the limit still doubles the cost of everything nested inside it (the deeper levels are laid out
+     * once per pass that is still enabled above them), total cost is roughly `O(2^limit * N)` for a
+     * chain `N` levels deep, not just `O(2^limit)` -- so the limit has to stay low enough that
+     * `2^limit` itself is a small constant, rather than merely "well below" the general DOM depth
+     * cap.
+     *
+     * If not set, the default is 8: `2^8` (256) worst-case extra cell layouts per level below the
+     * limit keeps even a multi-thousand-level nesting chain (already an extreme, non-legitimate
+     * input) rendering in a few seconds, while comfortably covering any table nesting depth seen in
+     * real documents (a handful of levels at most -- even elaborate nested-table email/report
+     * templates rarely exceed 5-6). Passing `0` disables the limit -- not recommended for untrusted
+     * input, since the cost really is exponential in nesting depth without it.
+     *
+     * @param max The maximum accepted table nesting depth, or `0` for no limit.
+     */
+    void setMaxTableNestingDepth(uint32_t max) { m_maxTableNestingDepth = max; }
+
+    /**
+     * @brief Returns the maximum depth to which tables are allowed to genuinely nest.
+     * @return The configured depth limit. See `setMaxTableNestingDepth()`.
+     */
+    uint32_t maxTableNestingDepth() const { return m_maxTableNestingDepth; }
+
 private:
     EngineLimits();
 
@@ -1074,6 +1119,7 @@ private:
     uint32_t m_maxCounterLength = 100000;
     uint32_t m_maxColumnCount = 1000;
     uint32_t m_maxTextNodeLength = 100000000;
+    uint32_t m_maxTableNestingDepth = 8;
 
     friend EngineLimits* engineLimits();
 };

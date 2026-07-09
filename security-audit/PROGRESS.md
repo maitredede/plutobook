@@ -30,7 +30,7 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`). **Pousser a
 | [x] | V17 | memcpy sur `data()` null (chaîne vide) | Basse | voir git log |
 | [x] | V18 | Défaut maxPageCount > limite PDF Cairo | Moyenne | voir git log |
 | [x] | V19 | `Heap::concatenateString` O(n²) | Haute | voir git log |
-| [ ] | V20 | Layout tables imbriquées exponentiel | Haute | — |
+| [x] | V20 | Layout tables imbriquées exponentiel | Haute | voir git log |
 | [ ] | V21 | Balancing multicolonne superlinéaire | Moyenne | — |
 
 **V01–V16 corrigés** (rebuild propre OK, PoC intégrés vérifiés). **V17–V21** = problèmes découverts
@@ -56,8 +56,26 @@ pendant les correctifs, désormais suivis et traités dans l'ordre : V17 → V18
   seule fois, à la première lecture (`TextNode::data()`) — coût O(n) au lieu de O(n²), texte
   identique (vérifié octet pour octet via `pdftotext`). Défense en profondeur additionnelle :
   `EngineLimits::maxTextNodeLength` (défaut 100 000 000 caractères, configurable). (V16)
-- **V20** — Layout de tables profondément imbriquées : coût exponentiel du calcul de largeur
-  intrinsèque au-delà de ~80-100 niveaux (indépendant du cap de profondeur V08). DoS CPU. (V08)
+- **V20** — Layout de tables profondément imbriquées : coût exponentiel confirmé par comptage
+  d'appels (2^(N+1)-2 layouts de cellule pour N niveaux), indépendant du cap de profondeur V08 (512).
+  Diagnostic : **pas** le calcul de largeur préférée (déjà mis en cache par boîte, coût O(N) mesuré) ;
+  le doublement vient du layout CSS à deux passes par table (mesure de hauteur naturelle puis
+  ré-layout étiré à la hauteur de ligne), chaque passe relayant intégralement toute table imbriquée à
+  l'intérieur. Mémoiser un layout complet (positions/overflow/fragmentation) aurait été bien plus
+  invasif qu'un calcul de largeur — repli choisi (option documentée dans le dossier V20) : nouvelle
+  limite `EngineLimits::maxTableNestingDepth` (défaut **8**, configurable, 0 = illimité) ; au-delà,
+  `TableSectionBox::layoutRows()` saute la passe d'étirement pour les cellules de cette table (même
+  contenu/largeur/position, simplement pas étirées face à une cellule voisine plus haute — cosmétique
+  uniquement, au-delà de la limite). Le défaut doit rester bas car le coût est
+  O(2^limite × profondeur_totale), pas seulement O(2^limite) : un défaut de l'ordre de 100 (a priori
+  raisonnable par analogie aux autres limites) resterait exponentiel et insuffisant — vérifié
+  empiriquement. Vérifié : mise à l'échelle linéaire (0.19/0.63/0.89/0.98 s pour 50/100/150/200
+  niveaux, contre hang/timeout pré-fix dès N≈20-25) ; PoC 150 niveaux → ~0.92 s (pré-fix : timeout
+  >20 s) ; non-régression par **comparaison PDF octet pour octet** (binaire pré-fix via `git stash` +
+  build séparé vs post-fix) sur grille simple/colspan-rowspan/imbrication 2 niveaux/largeurs
+  %-fixe-auto/caption (identiques) et sur imbrication réelle jusqu'à exactement la limite (profondeur
+  8 incluse, identique) ; ne diffère qu'au-delà (profondeur 9+, et seulement quand une ligne a des
+  cellules de hauteurs naturelles différentes). (V08)
 - **V21** — Balancing multicolonne superlinéaire en taille de contenu, même à `column-count`
   légitime. Perf/DoS CPU, distinct de V12. (V12)
 

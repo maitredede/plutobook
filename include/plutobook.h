@@ -850,6 +850,33 @@ PLUTOBOOK_API void plutobook_set_max_column_count(unsigned int max);
 PLUTOBOOK_API void plutobook_set_max_text_node_length(unsigned int max);
 
 /**
+ * @brief Sets the maximum depth to which tables are allowed to genuinely nest.
+ *
+ * Table layout is a two-pass algorithm per table (measure each cell's natural height, then relayout
+ * every cell stretched to its row's final height), and both passes fully lay out any table nested
+ * inside a cell. A table nested `N` levels deep is therefore laid out roughly `2^N` times, hanging
+ * the CPU from a tiny input, independent of `plutobook_set_max_nesting_depth()`'s general DOM depth
+ * cap.
+ *
+ * Once a table's nesting depth exceeds this limit, its cells skip the second (stretch) layout pass
+ * and keep the natural height from the first one: content still renders, at the same width and
+ * position, but is not stretched to fill the row when a sibling cell is taller. This only affects
+ * tables nested deeper than the limit.
+ *
+ * Every level at or above the limit still doubles the cost of everything nested inside it, so total
+ * cost is roughly `O(2^limit * N)` for a chain `N` levels deep, not just `O(2^limit)` -- the limit
+ * has to keep `2^limit` itself small, not merely stay below the general DOM depth cap.
+ *
+ * If not set, the default is 8: `2^8` (256) worst-case extra cell layouts per level below the limit
+ * keeps even a multi-thousand-level nesting chain rendering in a few seconds, while comfortably
+ * covering any table nesting depth seen in real documents (a handful of levels at most). Passing `0`
+ * disables the limit -- not recommended for untrusted input.
+ *
+ * @param max The maximum accepted table nesting depth, or `0` for no limit.
+ */
+PLUTOBOOK_API void plutobook_set_max_table_nesting_depth(unsigned int max);
+
+/**
  * @brief Defines the different media types used for CSS @media queries.
  */
 typedef enum _plutobook_media_type {
