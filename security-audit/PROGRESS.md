@@ -27,7 +27,7 @@ finding. One commit per finding (see `FIX-GUIDE.md`). **Push after every commit.
 | [x] | V14 | turbojpeg/webp return values | Low | 2945ca0 |
 | [x] | V15 | Assert-only bounds (latent) | Low | 086414c |
 | [x] | V16 | expat billion-laughs | Info | 371a78a |
-| [ ] | V17 | memcpy on null `data()` (empty string) | Low | — |
+| [x] | V17 | memcpy on null `data()` (empty string) | Low | see git log |
 | [ ] | V18 | maxPageCount default > Cairo PDF limit | Medium | — |
 | [ ] | V19 | `Heap::concatenateString` O(n²) | High | — |
 | [ ] | V20 | Exponential nested table layout | High | — |
