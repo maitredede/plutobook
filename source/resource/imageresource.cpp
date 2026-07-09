@@ -234,8 +234,9 @@ static cairo_surface_t* decodeBitmapImage(const char* data, size_t size)
     auto surfaceWidth = cairo_image_surface_get_width(surface);
     auto surfaceHeight = cairo_image_surface_get_height(surface);
     auto surfaceStride = cairo_image_surface_get_stride(surface);
+    auto imageStride = width * 4; // imageData is tightly packed (STBI_rgb_alpha => 4 bytes/pixel), unlike surfaceStride which cairo may pad.
     for(int y = 0; y < surfaceHeight; y++) {
-        uint32_t* src = (uint32_t*)(imageData + surfaceStride * y);
+        uint32_t* src = (uint32_t*)(imageData + imageStride * y);
         uint32_t* dst = (uint32_t*)(surfaceData + surfaceStride * y);
         for(int x = 0; x < surfaceWidth; x++) {
             uint32_t a = (src[x] >> 24) & 0xFF;

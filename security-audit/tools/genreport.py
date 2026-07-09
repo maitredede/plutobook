@@ -628,8 +628,24 @@ open("odd.bmp","wb").write(bmp + data)
 print("odd.bmp ecrit")
 """,
  },
- fix="<p>Utiliser le stride source packe (<code>width*4</code>) pour indexer <code>imageData</code>, pas <code>surfaceStride</code>.</p>",
- config="Correctif pur (pas de knob).",
+ fix="""<p>Nouvelle variable <code>imageStride = width * 4</code> (stb produit toujours 4 octets/pixel via
+ <code>STBI_rgb_alpha</code>, sans padding) utilisee pour avancer <code>src</code> ligne par ligne ;
+ <code>dst</code> continue d'avancer avec <code>surfaceStride</code> (le stride reel, potentiellement
+ padde, du buffer cairo). La logique de premultiplication alpha est inchangee.</p>""",
+ config="""<p>Correctif pur (pas de knob).</p>
+ <p><em>Verification</em> : rejoue sous ASan (<code>meson setup build-asan -Db_sanitize=address</code>) avec
+ des BMP/GIF de largeurs variees (1 a 257px, y compris non multiples de 4/16/32) passant par la voie stb
+ &mdash; aucune erreur, rendu correct (pixels non-transparents attendus presents). Sur ce systeme, la
+ fonction cairo <code>cairo_format_stride_for_width(ARGB32, w)</code> renvoie toujours exactement
+ <code>w*4</code> (verifie pour w=1..20) : le stride n'est jamais padde, donc le bug reste <strong>latent</strong>
+ sur ce build precis et ASan ne peut pas declencher l'over-read via le pipeline complet ici. La logique du
+ correctif a ete verifiee independamment par un harnais isole reproduisant exactement le motif d'indexation
+ (buffer stb packe de taille exacte + stride "cairo" simule artificiellement plus grand que <code>width*4</code>) :
+ la version non corrigee (indexation de <code>src</code> par le stride agrandi) declenche un
+ <code>heap-buffer-overflow</code> ASan net en lecture pile a la frontiere du buffer packe ; la version
+ corrigee (indexation par <code>imageStride</code>) s'execute sans erreur. Ceci confirme que le correctif
+ est correct pour tout build cairo qui padderait effectivement le stride ARGB32 au-dela de <code>width*4</code>.</p>""",
+ status="done",
 )
 
 add(
