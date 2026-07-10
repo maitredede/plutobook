@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V22 - TextShapeRun::positionForOffset/offsetForPosition are O(n²) per run</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script>
+(function(){var t=localStorage.getItem('pb-theme');if(t)document.documentElement.setAttribute('data-theme',t);
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('tg');if(!b)return;
+b.onclick=function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
+</script>
+</head><body><div class="wrap">
+<button class="toggle" id="tg">theme</button>
+<div class="crumb"><a href="../">&larr; All findings</a></div>
+<h1>V22 &middot; TextShapeRun::positionForOffset/offsetForPosition are O(n²) per run</h1>
+<p><span class="badge sev-high">High</span> &nbsp; <span class="muted">Denial of service (CPU)</span></p>
+<div class="card">
+<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Key file</b> <code>source/graphics/textshape.cpp</code></div>
+</div>
+
+<h2>Nature</h2>
+<p>Discovered while diagnosing V21. <code>TextShapeRun::positionForOffset()</code> and
+ <code>offsetForPosition()</code> rescan the glyph array <em>from index 0</em> on every call. Line
+ layout calls them once per line: for a long text run, each new line costs O(position) and the
+ whole run becomes O(n&sup2;). Reproduces on plain paginated single-column text (independent of
+ multicolumn): this is the real cause of the slowdown seen in V21's PoC.</p>
+
+<h2>Location</h2>
+<ul><li><code>source/graphics/textshape.cpp</code> &mdash; positionForOffset/offsetForPosition rescan the glyph array from index 0 on every call</li><li><code>source/layout/linelayout.cpp</code> &mdash; called once per line during layout -&gt; O(position) per line</li></ul>
+
+<h2>Risk &amp; impact</h2>
+<p><strong>Impact</strong>: CPU hang/slowness (DoS) from a long text document (multicolumn
+ or not). ~4-5x cost per line late in a document vs. early, measured.</p>
+
+<h2>Reproduction</h2>
+<ol class="steps"><li>Generate poc/make-longtext.py (long single-column text), render: superlinear pre-fix, ~linear post-fix.</li><li>V21's multicolumn PoC also becomes bounded after this fix.</li></ol>
+<p class="muted">Example files:</p>
+<ul><li><code>poc/make-longtext.py</code></li></ul>
+
+<h2>Proposed fix</h2>
+<p>Don't rescan from 0: resume from a cached cursor, or binary-search the (monotonic) glyph
+ offsets, making the run O(n) (or O(n log n)).</p>
+
+<h2>Configuration (default + configurable)</h2>
+<p>Algorithmic fix (no knob; text-node length is already bounded by V19).</p>
+
+<footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
+Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>
+</div></body></html>

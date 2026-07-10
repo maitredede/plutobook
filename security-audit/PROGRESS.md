@@ -32,9 +32,12 @@ finding. One commit per finding (see `FIX-GUIDE.md`). **Push after every commit.
 | [x] | V19 | `Heap::concatenateString` O(n²) | High | see git log |
 | [x] | V20 | Exponential nested table layout | High | see git log |
 | [x] | V21 | Superlinear multicolumn balancing | Medium | see git log |
+| [ ] | V22 | TextShape positionForOffset O(n²) (true cause of V21) | High | — |
 
 **V01–V16 fixed** (clean rebuild OK, integrated PoCs verified). **V17–V21** = issues discovered
-while fixing, now tracked and to be handled in order: V17 → V18 → V19 → V20 → V21.
+while fixing. **V22** = discovered while diagnosing V21: the real superlinear cost of the
+multicolumn PoC is an O(n²) in text shaping (`textshape.cpp`), which also affects any long
+single-column document. V21 bounded balancing (defensive); V22 fixes the real cause.
 
 ## Follow-up finding details (V17–V21)
 

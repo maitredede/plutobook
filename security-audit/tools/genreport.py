@@ -1042,6 +1042,39 @@ print("multicol.html written")
  status="done",
 )
 
+add(
+ id="V22", slug="V22-textshape-quadratic", severity="haute", cat="Denial of service (CPU)",
+ title="TextShapeRun::positionForOffset/offsetForPosition are O(n²) per run",
+ keyfile="source/graphics/textshape.cpp",
+ locations=[
+   ("source/graphics/textshape.cpp", "positionForOffset/offsetForPosition rescan the glyph array from index 0 on every call"),
+   ("source/layout/linelayout.cpp", "called once per line during layout -> O(position) per line"),
+ ],
+ nature="""<p>Discovered while diagnosing V21. <code>TextShapeRun::positionForOffset()</code> and
+ <code>offsetForPosition()</code> rescan the glyph array <em>from index 0</em> on every call. Line
+ layout calls them once per line: for a long text run, each new line costs O(position) and the
+ whole run becomes O(n&sup2;). Reproduces on plain paginated single-column text (independent of
+ multicolumn): this is the real cause of the slowdown seen in V21's PoC.</p>""",
+ risk="""<p><strong>Impact</strong>: CPU hang/slowness (DoS) from a long text document (multicolumn
+ or not). ~4-5x cost per line late in a document vs. early, measured.</p>""",
+ repro=[
+   "Generate poc/make-longtext.py (long single-column text), render: superlinear pre-fix, ~linear post-fix.",
+   "V21's multicolumn PoC also becomes bounded after this fix.",
+ ],
+ poc={
+  "make-longtext.py": """#!/usr/bin/env python3
+# Long single-column text run (many lines) to exercise O(n^2) positionForOffset.
+para = ("word " * 200000).strip()
+open("longtext.html", "w").write(
+  "<!DOCTYPE html><html><body><p>" + para + "</p></body></html>")
+print("longtext.html written")
+""",
+ },
+ fix="""<p>Don't rescan from 0: resume from a cached cursor, or binary-search the (monotonic) glyph
+ offsets, making the run O(n) (or O(n log n)).</p>""",
+ config="Algorithmic fix (no knob; text-node length is already bounded by V19).",
+)
+
 # ---------------------------------------------------------------------------
 # HTML rendering
 # ---------------------------------------------------------------------------

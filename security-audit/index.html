@@ -12,9 +12,9 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 </head><body><div class="wrap">
 <button class="toggle" id="tg">theme</button>
 <h1>PlutoBook &mdash; Security Audit Report</h1>
-<p class="lead">Red-team audit of the HTML/XML/CSS/SVG &rarr; PDF rendering engine. 21 findings,
+<p class="lead">Red-team audit of the HTML/XML/CSS/SVG &rarr; PDF rendering engine. 22 findings,
 ranked by severity.</p>
-<p><span class="badge sev-crit">2 Critical</span> &middot; <span class="badge sev-high">8 High</span> &middot; <span class="badge sev-medhigh">2 Medium+</span> &middot; <span class="badge sev-med">4 Medium</span> &middot; <span class="badge sev-low">4 Low</span> &middot; <span class="badge sev-info">1 Info</span></p>
+<p><span class="badge sev-crit">2 Critical</span> &middot; <span class="badge sev-high">9 High</span> &middot; <span class="badge sev-medhigh">2 Medium+</span> &middot; <span class="badge sev-med">4 Medium</span> &middot; <span class="badge sev-low">4 Low</span> &middot; <span class="badge sev-info">1 Info</span></p>
 
 <div class="card">
 <h3 style="margin-top:0">Executive summary</h3>
@@ -112,6 +112,14 @@ is unrecoverable.</p>
 <td>Denial of service (CPU)</td>
 <td><code>source/layout/tablebox.cpp</code></td>
 <td><span class="status-done">fixed</span></td>
+</tr>
+<tr>
+<td><a href="V22-textshape-quadratic/">V22</a></td>
+<td><a href="V22-textshape-quadratic/">TextShapeRun::positionForOffset/offsetForPosition are O(n²) per run</a></td>
+<td><span class="badge sev-high">High</span></td>
+<td>Denial of service (CPU)</td>
+<td><code>source/graphics/textshape.cpp</code></td>
+<td><span class="status-todo">open</span></td>
 </tr>
 <tr>
 <td><a href="V09-page-count/">V09</a></td>
