@@ -27,12 +27,12 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`). **Pousser a
 | [x] | V14 | Retours turbojpeg/webp | Basse | 2945ca0 |
 | [x] | V15 | Bornes en assert (latent) | Basse | 086414c |
 | [x] | V16 | expat billion-laughs | Info | 371a78a |
-| [x] | V17 | memcpy sur `data()` null (chaîne vide) | Basse | voir git log |
-| [x] | V18 | Défaut maxPageCount > limite PDF Cairo | Moyenne | voir git log |
-| [x] | V19 | `Heap::concatenateString` O(n²) | Haute | voir git log |
-| [x] | V20 | Layout tables imbriquées exponentiel | Haute | voir git log |
-| [x] | V21 | Balancing multicolonne superlinéaire | Moyenne | voir git log |
-| [x] | V22 | TextShape positionForOffset O(n²) (vraie cause de V21) | Haute | voir git log |
+| [x] | V17 | memcpy sur `data()` null (chaîne vide) | Basse | 524e7f7 |
+| [x] | V18 | Défaut maxPageCount > limite PDF Cairo | Moyenne | e4809ac |
+| [x] | V19 | `Heap::concatenateString` O(n²) | Haute | aa01f02 |
+| [x] | V20 | Layout tables imbriquées exponentiel | Haute | 5e2f11e |
+| [x] | V21 | Balancing multicolonne superlinéaire | Moyenne | e655c98 |
+| [x] | V22 | TextShape positionForOffset O(n²) (vraie cause de V21) | Haute | f8e4389 |
 
 **V01–V16 corrigés** (rebuild propre OK, PoC intégrés vérifiés). **V17–V21** = problèmes découverts
 pendant les correctifs. **V22** = découvert en diagnostiquant V21 : le coût superlinéaire réel du PoC
