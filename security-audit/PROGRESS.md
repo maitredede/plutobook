@@ -27,12 +27,12 @@ finding. One commit per finding (see `FIX-GUIDE.md`). **Push after every commit.
 | [x] | V14 | turbojpeg/webp return values | Low | 2945ca0 |
 | [x] | V15 | Assert-only bounds (latent) | Low | 086414c |
 | [x] | V16 | expat billion-laughs | Info | 371a78a |
-| [x] | V17 | memcpy on null `data()` (empty string) | Low | see git log |
-| [x] | V18 | maxPageCount default > Cairo PDF limit | Medium | see git log |
-| [x] | V19 | `Heap::concatenateString` O(n²) | High | see git log |
-| [x] | V20 | Exponential nested table layout | High | see git log |
-| [x] | V21 | Superlinear multicolumn balancing | Medium | see git log |
-| [x] | V22 | TextShape positionForOffset O(n²) (true cause of V21) | High | see git log |
+| [x] | V17 | memcpy on null `data()` (empty string) | Low | 524e7f7 |
+| [x] | V18 | maxPageCount default > Cairo PDF limit | Medium | e4809ac |
+| [x] | V19 | `Heap::concatenateString` O(n²) | High | aa01f02 |
+| [x] | V20 | Exponential nested table layout | High | 5e2f11e |
+| [x] | V21 | Superlinear multicolumn balancing | Medium | e655c98 |
+| [x] | V22 | TextShape positionForOffset O(n²) (true cause of V21) | High | f8e4389 |
 
 **V01–V16 fixed** (clean rebuild OK, integrated PoCs verified). **V17–V21** = issues discovered
 while fixing. **V22** = discovered while diagnosing V21: the real superlinear cost of the
