@@ -38,36 +38,59 @@ TextShapeRun::TextShapeRun(const SimpleFontData* fontData, uint32_t offset, uint
     , m_length(length)
     , m_width(width)
     , m_glyphs(std::move(glyphs))
+    , m_advancesNonNegative(true)
 {
+    // Precompute the running advance total once so positionForOffset()/offsetForPosition() can
+    // binary search the (monotonic) glyph array instead of rescanning it from index 0 on every
+    // call -- line layout queries these once per line, so a linear rescan makes a long run O(n^2).
+    float cumulativeAdvance = 0.f;
+    const auto numGlyphs = m_glyphs.size();
+    for(size_t index = 0; index < numGlyphs; ++index) {
+        auto& glyphData = m_glyphs[index];
+        if(glyphData.advance < 0.f)
+            m_advancesNonNegative = false;
+        cumulativeAdvance += glyphData.advance;
+        glyphData.advanceUpTo = cumulativeAdvance;
+    }
+}
+
+// Returns the smallest index in [0, n) for which pred holds, given that pred(i) is false for a
+// prefix of indices and true from then on (monotonic). Returns n if pred never holds.
+template<typename Pred>
+static uint32_t lowerBoundIndex(uint32_t n, Pred&& pred)
+{
+    uint32_t lo = 0;
+    uint32_t hi = n;
+    while(lo < hi) {
+        auto mid = lo + (hi - lo) / 2;
+        if(pred(mid))
+            hi = mid;
+        else
+            lo = mid + 1;
+    }
+
+    return lo;
+}
+
+uint32_t TextShapeRun::glyphIndexForOffset(uint32_t offset, Direction direction) const
+{
+    const auto numGlyphs = m_glyphs.size();
+    if(direction == Direction::Rtl) {
+        // characterIndex is non-increasing along the glyph array for an RTL run: find the first
+        // glyph whose characterIndex has dropped below offset.
+        return lowerBoundIndex(numGlyphs, [&](uint32_t i) { return m_glyphs[i].characterIndex < offset; });
+    }
+
+    // characterIndex is non-decreasing along the glyph array for an LTR run: find the first
+    // glyph whose characterIndex has reached offset.
+    return lowerBoundIndex(numGlyphs, [&](uint32_t i) { return m_glyphs[i].characterIndex >= offset; });
 }
 
 float TextShapeRun::positionForOffset(uint32_t offset, Direction direction) const
 {
     assert(offset <= m_length);
-    uint32_t glyphIndex = 0;
-    float position = 0;
-    const auto numGlyphs = m_glyphs.size();
-    if(direction == Direction::Rtl) {
-        while(glyphIndex < numGlyphs && m_glyphs[glyphIndex].characterIndex > offset) {
-            position += m_glyphs[glyphIndex++].advance;
-        }
-
-        if(glyphIndex == numGlyphs || m_glyphs[glyphIndex].characterIndex < offset)
-            return position;
-        auto characterIndex = m_glyphs[glyphIndex].characterIndex;
-        while(glyphIndex < numGlyphs - 1 && characterIndex == m_glyphs[glyphIndex + 1].characterIndex) {
-            position += m_glyphs[glyphIndex++].advance;
-        }
-
-        position += m_glyphs[glyphIndex].advance;
-    } else {
-        while(glyphIndex < numGlyphs && m_glyphs[glyphIndex].characterIndex < offset) {
-            position += m_glyphs[glyphIndex].advance;
-            ++glyphIndex;
-        }
-    }
-
-    return position;
+    auto index = glyphIndexForOffset(offset, direction);
+    return index == 0 ? 0.f : m_glyphs[index - 1].advanceUpTo;
 }
 
 float TextShapeRun::positionForVisualOffset(uint32_t offset, Direction direction) const
@@ -83,9 +106,27 @@ uint32_t TextShapeRun::offsetForPosition(float position, Direction direction) co
     assert(position >= 0.f && position <= m_width);
     if(position <= 0.f)
         return direction == Direction::Ltr ? 0 : m_length;
+    const auto numGlyphs = m_glyphs.size();
+    if(m_advancesNonNegative) {
+        // advanceUpTo is non-decreasing along the glyph array in this (common) case, so the first
+        // glyph whose cumulative advance crosses `position` can be found by binary search. Glyphs
+        // sharing a cluster share a characterIndex, so it does not matter whether the search lands
+        // on the first or last glyph of the crossing cluster -- the returned characterIndex is the
+        // same either way, matching the linear scan below exactly.
+        auto index = direction == Direction::Rtl
+            ? lowerBoundIndex(numGlyphs, [&](uint32_t i) { return position <= m_glyphs[i].advanceUpTo; })
+            : lowerBoundIndex(numGlyphs, [&](uint32_t i) { return position < m_glyphs[i].advanceUpTo; });
+        if(index == numGlyphs)
+            return direction == Direction::Rtl ? 0 : m_length;
+        return m_glyphs[index].characterIndex;
+    }
+
+    // Fallback for the rare run containing a negative advance (eg. sufficiently negative
+    // letter-spacing/word-spacing applied to a narrow glyph), where the cumulative advance is not
+    // guaranteed monotonic and a binary search could disagree with a left-to-right scan. Kept
+    // verbatim from the original implementation so behavior is unchanged for these runs.
     uint32_t glyphIndex = 0;
     float currentPosition = 0.f;
-    const auto numGlyphs = m_glyphs.size();
     while(glyphIndex < numGlyphs) {
         currentPosition += m_glyphs[glyphIndex].advance;
 
@@ -381,6 +422,41 @@ UString TextShapeView::text() const
     return m_shape->text().tempSubStringBetween(m_startOffset, m_endOffset);
 }
 
+// TextShapeView methods below all used to walk every run of the shape from its first glyph, even
+// for runs entirely outside [startOffset, endOffset) -- harmless for a short view into a short
+// shape, but a view onto one line of a long single-run paragraph rescanned the whole run so far on
+// every call (once per line), making the run O(n^2). Runs appear offset-ascending for LTR shapes
+// and offset-descending for RTL shapes (see TextShape::createForText), so a run entirely on the
+// far side of the view can be skipped for O(1), the outer loop can stop once further runs are all
+// out of range, and TextShapeRun::glyphIndexForOffset() binary searches straight to the first
+// glyph of an overlapping run that can matter, instead of starting from glyph 0.
+struct TextShapeViewRunRange {
+    bool skip;
+    bool stop;
+    uint32_t startGlyphIndex;
+};
+
+static TextShapeViewRunRange rangeForView(const TextShapeRun& run, Direction direction, uint32_t startOffset, uint32_t endOffset)
+{
+    auto runStart = run.offset();
+    auto runEnd = runStart + run.length();
+    if(direction == Direction::Ltr) {
+        if(runStart >= endOffset)
+            return {true, true, 0};
+        if(runEnd <= startOffset)
+            return {true, false, 0};
+        auto localOffset = startOffset > runStart ? startOffset - runStart : 0;
+        return {false, false, run.glyphIndexForOffset(localOffset, direction)};
+    }
+
+    if(runEnd <= startOffset)
+        return {true, true, 0};
+    if(runStart >= endOffset)
+        return {true, false, 0};
+    auto localOffset = endOffset > runStart ? endOffset - runStart : 0;
+    return {false, false, run.glyphIndexForOffset(localOffset, direction)};
+}
+
 uint32_t TextShapeView::expansionOpportunityCount() const
 {
     if(m_startOffset == m_endOffset)
@@ -389,8 +465,13 @@ uint32_t TextShapeView::expansionOpportunityCount() const
     auto direction = m_shape->direction();
     const auto& text = m_shape->text();
     for(const auto& run : m_shape->runs()) {
+        auto range = rangeForView(*run, direction, m_startOffset, m_endOffset);
+        if(range.stop)
+            break;
+        if(range.skip)
+            continue;
         const auto& glyphs = run->glyphs();
-        for(uint32_t glyphIndex = 0; glyphIndex < glyphs.size(); ++glyphIndex) {
+        for(uint32_t glyphIndex = range.startGlyphIndex; glyphIndex < glyphs.size(); ++glyphIndex) {
             const auto& glyph = glyphs[glyphIndex];
             auto characterIndex = glyph.characterIndex + run->offset();
             if((direction == Direction::Ltr && characterIndex >= m_endOffset)
@@ -417,8 +498,13 @@ void TextShapeView::maxAscentAndDescent(float& maxAscent, float& maxDescent) con
         return;
     auto direction = m_shape->direction();
     for(const auto& run : m_shape->runs()) {
+        auto range = rangeForView(*run, direction, m_startOffset, m_endOffset);
+        if(range.stop)
+            break;
+        if(range.skip)
+            continue;
         const auto& glyphs = run->glyphs();
-        for(uint32_t glyphIndex = 0; glyphIndex < glyphs.size(); ++glyphIndex) {
+        for(uint32_t glyphIndex = range.startGlyphIndex; glyphIndex < glyphs.size(); ++glyphIndex) {
             const auto& glyph = glyphs[glyphIndex];
             auto characterIndex = glyph.characterIndex + run->offset();
             if((direction == Direction::Ltr && characterIndex >= m_endOffset)
@@ -443,8 +529,13 @@ float TextShapeView::width(float expansion) const
     auto direction = m_shape->direction();
     const auto& text = m_shape->text();
     for(const auto& run : m_shape->runs()) {
+        auto range = rangeForView(*run, direction, m_startOffset, m_endOffset);
+        if(range.stop)
+            break;
+        if(range.skip)
+            continue;
         const auto& glyphs = run->glyphs();
-        for(uint32_t glyphIndex = 0; glyphIndex < glyphs.size(); ++glyphIndex) {
+        for(uint32_t glyphIndex = range.startGlyphIndex; glyphIndex < glyphs.size(); ++glyphIndex) {
             const auto& glyph = glyphs[glyphIndex];
             auto characterIndex = glyph.characterIndex + run->offset();
             if((direction == Direction::Ltr && characterIndex >= m_endOffset)
@@ -473,11 +564,18 @@ float TextShapeView::draw(GraphicsContext& context, const Point& origin, float e
     auto direction = m_shape->direction();
     auto offset = origin;
     const auto& text = m_shape->text();
+    // Unlike the pure accumulators above, this loop has a visible side effect (cairo drawing calls)
+    // for every run, including ones entirely outside the view -- so, unlike above, the outer loop
+    // still visits every run in order and issues the same calls for it; only the (potentially
+    // expensive) glyph scan is skipped/narrowed, which leaves numGlyphs at 0 exactly as the
+    // original scan would have for such a run.
     for(const auto& run : m_shape->runs()) {
+        auto range = rangeForView(*run, direction, m_startOffset, m_endOffset);
         const auto& glyphs = run->glyphs();
+        auto startGlyphIndex = range.skip || range.stop ? glyphs.size() : range.startGlyphIndex;
         auto glyphBuffer = cairo_glyph_allocate(glyphs.size());
         uint32_t numGlyphs = 0;
-        for(uint32_t glyphIndex = 0; glyphIndex < glyphs.size(); ++glyphIndex) {
+        for(uint32_t glyphIndex = startGlyphIndex; glyphIndex < glyphs.size(); ++glyphIndex) {
             const auto& glyph = glyphs[glyphIndex];
             auto characterIndex = glyph.characterIndex + run->offset();
             if((direction == Direction::Ltr && characterIndex >= m_endOffset)

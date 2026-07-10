@@ -32,14 +32,16 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`). **Pousser a
 | [x] | V19 | `Heap::concatenateString` O(n²) | Haute | voir git log |
 | [x] | V20 | Layout tables imbriquées exponentiel | Haute | voir git log |
 | [x] | V21 | Balancing multicolonne superlinéaire | Moyenne | voir git log |
-| [ ] | V22 | TextShape positionForOffset O(n²) (vraie cause de V21) | Haute | — |
+| [x] | V22 | TextShape positionForOffset O(n²) (vraie cause de V21) | Haute | voir git log |
 
 **V01–V16 corrigés** (rebuild propre OK, PoC intégrés vérifiés). **V17–V21** = problèmes découverts
 pendant les correctifs. **V22** = découvert en diagnostiquant V21 : le coût superlinéaire réel du PoC
 multicolonne est un O(n²) de shaping de texte (`textshape.cpp`), qui touche aussi tout long document
-simple colonne. V21 a borné le balancing (défensif) ; V22 corrige la vraie cause.
+simple colonne. V21 a borné le balancing (défensif) ; **V22 corrige la vraie cause** (recherche
+dichotomique dans `TextShapeRun` + le même correctif étendu aux méthodes de scan de glyphes de
+`TextShapeView`, nécessaires en pratique pour que le PoC redevienne rapide — détails ci-dessous).
 
-## Détails des problèmes de suivi (V17–V21)
+## Détails des problèmes de suivi (V17–V22)
 
 - **V17** — memcpy sur `data()` null dans `Heap::createString` (`heapstring.h:72`) pour un
   `string_view` vide, atteignable via `content:"\` + EOF (UB). (repéré en V15 ; le `std::abs(INT_MIN)`
@@ -101,6 +103,39 @@ simple colonne. V21 a borné le balancing (défensif) ; V22 corrige la vraie cau
   bien un arrêt anticipé mesurable (PDF différent) tout en gardant un rendu complet et valide (aucun
   contenu perdu). Mise en garde : ce correctif ne fait **pas** converger le PoC littéral vers un temps
   linéaire, la cause dominante étant hors périmètre (voir ci-dessus). (V12)
+- **V22** — Root cause de V21 : `TextShapeRun::positionForOffset()`/`offsetForPosition()`
+  re-parcourent le tableau de glyphes depuis l'indice 0 à chaque appel ; le line layout les appelle une
+  fois par ligne, donc un long run devient O(n²). Corrigé par recherche dichotomique
+  (`glyphIndexForOffset()`, nouveau) sur `characterIndex` (monotone par construction HarfBuzz, croissant
+  en LTR / décroissant en RTL, quel que soit le signe des avances) + une somme cumulée des avances
+  (`advanceUpTo`) précalculée une seule fois à la création du run, rendant les deux fonctions O(log n)
+  au lieu de O(n). `offsetForPosition` recherche sur la somme cumulée elle-même, qui n'est monotone que
+  si toutes les avances sont ≥ 0 (cas normal) ; un `letter-spacing`/`word-spacing` négatif assez fort
+  peut rendre une avance négative — dans ce cas (rare, détecté une fois par run à la création), la
+  fonction retombe sur le rescan linéaire original **verbatim**, pour ne jamais risquer un résultat
+  différent d'un cas non prouvé monotone.
+  **Diagnostic affiné pendant l'implémentation** : ce seul correctif ne suffisait pas — mesuré
+  empiriquement (5000/10000/20000/40000 mots : 0,8s/2,9s/11,4s/42s, toujours quadratique après la
+  recherche dichotomique seule). Instrumentation par compteurs d'itérations : le morceau dominant était
+  en fait dans `TextShapeView::width()`, `maxAscentAndDescent()`, `draw()` et
+  `expansionOpportunityCount()` — même motif (parcourent tous les runs de la shape depuis le glyphe 0 à
+  chaque appel, y compris pour les runs entièrement hors de la vue courante, qu'elles balaient en pure
+  perte). Corrigées avec la même technique via une nouvelle fonction `rangeForView()` : saut O(1) des
+  runs entièrement hors-plage (arrêt de la boucle externe dès que les runs restants le sont
+  nécessairement aussi, l'ordre étant croissant en LTR / décroissant en RTL) et recherche dichotomique
+  du premier glyphe pertinent dans le run qui chevauche la vue. Cas particulier de `draw()`, qui a un
+  effet de bord par run (appels cairo) : sa boucle externe continue de visiter tous les runs dans le même
+  ordre et émet les mêmes appels cairo pour chacun — seul le balayage de glyphes est raccourci, laissant
+  `numGlyphs` à 0 exactement comme le balayage original l'aurait fait pour un run hors-plage.
+  Vérifié : mise à l'échelle quasi linéaire une fois les 4 méthodes corrigées (200k mots : 40s+ timeout →
+  1,4s ; 2x → 3,7s ; 4x → 11,0s — légèrement superlinéaire au-delà de textshape.cpp lui-même, confirmé
+  par compteurs : les fonctions corrigées scalent, elles, parfaitement linéairement ; résidu hors
+  périmètre, ailleurs dans le pipeline) ; PoC V21 (`make-multicol.py`) 60s timeout pré-fix → 0,24s
+  post-fix ; **non-régression par comparaison octet pour octet** (binaire pré-fix via `git stash` + build
+  meson séparé) sur 14 documents couvrant LTR multi-paragraphe, texte justifié, polices/styles mélangés,
+  ligatures, `letter-spacing` négatif (chemin de repli inclus), arabe RTL, hébreu RTL, bidi mixte,
+  tabulations, cas limites, texte SVG (`draw()` hors linelayout.cpp), et versions réduites des PoC
+  longtext/V21 — tous identiques au byte près (PDF, plus PNG sur 6 de ces documents). (V21)
 
 ## Notes
 

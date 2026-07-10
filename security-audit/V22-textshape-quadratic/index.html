@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V22 &middot; TextShapeRun::positionForOffset/offsetForPosition en O(n²) par run</h1>
 <p><span class="badge sev-high">Haute</span> &nbsp; <span class="muted">Deni de service (CPU)</span></p>
 <div class="card">
-<div class="kv"><b>Statut</b> <span class="status-todo">a corriger</span></div>
+<div class="kv"><b>Statut</b> <span class="status-done">corrige</span></div>
 <div class="kv"><b>Fichier cle</b> <code>source/graphics/textshape.cpp</code></div>
 </div>
 
@@ -24,26 +24,78 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
  <code>offsetForPosition()</code> reparcourent le tableau de glyphes <em>depuis l'index 0</em> a chaque
  appel. Le line layout les appelle une fois par ligne : pour un long run de texte, chaque nouvelle
  ligne coute O(position) et le run entier devient O(n&sup2;). Se reproduit sur du texte simple colonne
- pagine (independant du multicolonne) : c'est la vraie cause du ralentissement du PoC de V21.</p>
+ pagine (independant du multicolonne).</p>
+ <p><strong>Diagnostic affine pendant le correctif</strong> : corriger uniquement ces deux fonctions
+ (recherche dichotomique au lieu du rescan) n'a <em>pas</em> suffi -- mesure empirique a l'appui
+ (5000/10000/20000/40000 mots : 0,8s / 2,9s / 11,4s / 42s, toujours quadratique). Instrumentation par
+ compteurs d'iterations : le veritable morceau dominant etait dans <code>TextShapeView::width()</code>,
+ <code>maxAscentAndDescent()</code> et <code>draw()</code> (et par le meme motif,
+ <code>expansionOpportunityCount()</code>) -- ces methodes parcourent <em>tous les runs de la shape</em>
+ a chaque appel et, pour tout run entierement hors de la plage [startOffset,endOffset) de la vue courante,
+ balaient neanmoins la totalite de ses glyphes sans le moindre effet (aucune condition ne devient vraie),
+ uniquement pour le "sauter". Meme situation qu'un run unique assez long : la vue d'une ligne tardive
+ revisite tout ce qui precede a chaque appel. Une fois ces quatre methodes corrigees en plus des deux
+ nommees dans le titre, la mise a l'echelle mesuree redevient quasi lineaire (voir Correctif).</p>
 
 <h2>Localisation</h2>
-<ul><li><code>source/graphics/textshape.cpp</code> &mdash; positionForOffset/offsetForPosition rescannent les glyphes depuis l'index 0 a chaque appel</li><li><code>source/layout/linelayout.cpp</code> &mdash; appelees par ligne lors du layout -&gt; O(position) par ligne</li></ul>
+<ul><li><code>source/graphics/textshape.cpp</code> &mdash; positionForOffset/offsetForPosition rescannent les glyphes depuis l'index 0 a chaque appel</li><li><code>source/graphics/textshape.cpp</code> &mdash; TextShapeView::width/maxAscentAndDescent/draw/expansionOpportunityCount rescannent aussi tous les runs depuis le glyphe 0</li><li><code>source/layout/linelayout.cpp</code> &mdash; appelees par ligne lors du layout -&gt; O(position) par ligne</li></ul>
 
 <h2>Risque &amp; impact</h2>
 <p><strong>Impact</strong> : hang/lenteur CPU (DoS) a partir d'un long document texte
- (multicolonne ou non). Cout ~4-5x par ligne en fin de document vs debut, mesure.</p>
+ (multicolonne ou non). Cout ~4-5x par ligne en fin de document vs debut, mesure ; sans le correctif
+ complet (les 4 methodes de <code>TextShapeView</code> incluses), le PoC 200 000 mots reste hors delai
+ (&gt;40s) meme avec la recherche dichotomique sur les deux seules fonctions nommees dans ce finding.</p>
 
 <h2>Reproduction</h2>
-<ol class="steps"><li>Generer poc/make-longtext.py (long texte simple colonne), rendre : superlineaire pre-fix, ~lineaire post-fix.</li><li>Le PoC multicolonne de V21 devient egalement borne apres ce correctif.</li></ol>
+<ol class="steps"><li>Generer poc/make-longtext.py (long texte simple colonne), rendre : superlineaire pre-fix (40s+ timeout), ~lineaire post-fix (1,4s).</li><li>Le PoC multicolonne de V21 devient egalement rapide apres ce correctif (60s timeout pre-fix -> 0,24s post-fix, mesure sur poc/make-multicol.py de V21).</li></ol>
 <p class="muted">Fichiers d'exemple :</p>
 <ul><li><code>poc/make-longtext.py</code></li></ul>
 
 <h2>Correctif propose</h2>
-<p>Ne pas rescanner depuis 0 : reprendre depuis un curseur memorise, ou faire une recherche
- dichotomique sur les offsets de glyphes (monotones), rendant le run O(n) (ou O(n log n)).</p>
+<p>Recherche dichotomique sur les offsets de glyphes (monotones) au lieu d'un rescan depuis 0 :
+ <code>TextShapeRun::positionForOffset()</code>/<code>offsetForPosition()</code> deviennent O(log n) par
+ appel via une nouvelle methode privee <code>glyphIndexForOffset()</code> et une somme cumulee des
+ avances (<code>advanceUpTo</code>) precalculee une seule fois a la creation du run (O(n), amorti sur
+ tous les appels ulterieurs). <code>positionForOffset</code> recherche sur <code>characterIndex</code>,
+ monotone par construction HarfBuzz (croissant pour LTR, decroissant pour RTL) quel que soit le signe
+ des avances -- toujours sur. <code>offsetForPosition</code> recherche sur la somme cumulee elle-meme,
+ qui n'est monotone que si toutes les avances sont &ge; 0 (le cas normal) ; un <code>letter-spacing</code>/
+ <code>word-spacing</code> negatif suffisamment fort peut rendre une avance negative -- dans ce cas
+ (rare, detecte une fois par run a la creation), <code>offsetForPosition</code> retombe sur le rescan
+ lineaire original verbatim, pour garantir un resultat identique en toute circonstance plutot que de
+ supposer une monotonie non garantie.</p>
+ <p>Complement necessaire (voir Nature) : <code>TextShapeView::width()</code>,
+ <code>maxAscentAndDescent()</code>, <code>draw()</code> et <code>expansionOpportunityCount()</code>
+ corrigees du meme mal avec la meme technique -- une nouvelle fonction <code>rangeForView()</code>
+ saute en O(1) tout run entierement hors de la vue (et arrete la boucle externe des que les runs
+ restants le sont necessairement aussi, l'ordre des runs etant croissant en LTR / decroissant en RTL)
+ et utilise <code>glyphIndexForOffset()</code> pour sauter directement au premier glyphe pertinent du
+ run qui chevauche la vue, au lieu de rescanner depuis 0. Cas particulier de <code>draw()</code> : elle a
+ un effet de bord visible par run (appels cairo), donc contrairement aux trois autres (pures, sans effet
+ pour un run saute), sa boucle externe continue de visiter <em>tous</em> les runs dans le meme ordre et
+ emet les memes appels cairo pour chacun (seul le balayage de glyphes est raccourci/supprime, ce qui
+ laisse <code>numGlyphs</code> a 0 exactement comme le balayage original l'aurait fait pour un tel run).</p>
 
 <h2>Configuration (defaut + configurable)</h2>
-<p>Correctif algorithmique (pas de knob ; la longueur de noeud texte est deja bornee en V19).</p>
+<p>Correctif algorithmique (pas de knob ; la longueur de noeud texte est deja bornee en V19).
+ Verification -- <strong>mise a l'echelle</strong> : poc/make-longtext.py (200k mots) 40s+ timeout &rarr;
+ 1,4s ; a 2x (400k mots) 3,7s, a 4x (800k mots) 11,0s (legerement superlineaire au-dela de la correction
+ textshape.cpp elle-meme -- confirme par compteurs d'iterations que les methodes <code>TextShapeView</code>
+ et <code>TextShapeRun</code> corrigees scalent, elles, parfaitement lineairement avec la taille du
+ document ; le residu vient d'ailleurs dans le pipeline, hors perimetre) ;
+ 5000/10000/20000/40000 mots passent de 0,8s/2,9s/11,4s/42s (quadratique, correctif partiel) a
+ 0,075s/0,098s/0,15s/0,27s (quasi lineaire, correctif complet). <strong>PoC V21</strong>
+ (poc/make-multicol.py, 20000 mots / 3 colonnes) : 60s timeout pre-fix (binaire via
+ <code>git stash</code> + build separe) &rarr; 0,24s post-fix. <strong>Non-regression, identite au byte
+ pres</strong> (binaire pre-fix via <code>git stash</code> + build meson separe, compare au binaire
+ post-fix) sur 14 documents : LTR multi-paragraphe, texte justifie (expansionOpportunityCount),
+ polices/styles/tailles melanges dans une meme ligne, mots a ligatures (ffi/ffl/fi/fl),
+ <code>letter-spacing</code> negatif (y compris chemin de repli), arabe RTL (Noto Sans Arabic), hebreu
+ RTL (Noto Serif Hebrew), paragraphe bidi LTR/RTL/RTL melange dans la meme ligne, tabulations, cas
+ limites (paragraphe vide/un caractere/un espace), texte SVG (chemin <code>TextShapeView::draw</code>
+ distinct de linelayout.cpp), longtext reduit, PoC V21 multicolonne reduit -- toutes les sorties PDF
+ identiques au byte pres (<code>cmp</code>) ; 6 de ces documents egalement identiques au byte pres en
+ sortie PNG (<code>html2png</code>).</p>
 
 <footer>PlutoBook &mdash; audit de securite red-team. Rapport statique genere pour lecture humaine.
 Modele de menace : input non fiable (rendu serveur de HTML/SVG/CSS arbitraire).</footer>
