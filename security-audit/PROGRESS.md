@@ -32,14 +32,16 @@ finding. One commit per finding (see `FIX-GUIDE.md`). **Push after every commit.
 | [x] | V19 | `Heap::concatenateString` O(n²) | High | see git log |
 | [x] | V20 | Exponential nested table layout | High | see git log |
 | [x] | V21 | Superlinear multicolumn balancing | Medium | see git log |
-| [ ] | V22 | TextShape positionForOffset O(n²) (true cause of V21) | High | — |
+| [x] | V22 | TextShape positionForOffset O(n²) (true cause of V21) | High | see git log |
 
 **V01–V16 fixed** (clean rebuild OK, integrated PoCs verified). **V17–V21** = issues discovered
 while fixing. **V22** = discovered while diagnosing V21: the real superlinear cost of the
 multicolumn PoC is an O(n²) in text shaping (`textshape.cpp`), which also affects any long
-single-column document. V21 bounded balancing (defensive); V22 fixes the real cause.
+single-column document. V21 bounded balancing (defensive); **V22 fixes the real cause** (binary
+search in `TextShapeRun` + the same fix extended to `TextShapeView`'s glyph-scanning methods,
+needed in practice to make the PoC fast again — details below).
 
-## Follow-up finding details (V17–V21)
+## Follow-up finding details (V17–V22)
 
 - **V17** — memcpy on a null `data()` in `Heap::createString` (`heapstring.h:72`) for an empty
   `string_view`, reachable via `content:"\` + EOF (UB). (found during V15; the neighboring
@@ -100,6 +102,39 @@ single-column document. V21 bounded balancing (defensive); V22 fixes the real ca
   measurable early stop (different PDF) while still producing complete, valid output (no content
   lost). Caveat: this fix does **not** make the literal PoC render in linear time — the dominant
   cause is out of scope (see above). (V12)
+- **V22** — Root cause of V21: `TextShapeRun::positionForOffset()`/`offsetForPosition()` used to
+  rescan the glyph array from index 0 on every call; line layout calls them once per line, so a
+  long run became O(n²). Fixed with a binary search (`glyphIndexForOffset()`, new) on
+  `characterIndex` (monotonic by HarfBuzz construction, ascending in LTR / descending in RTL,
+  regardless of advance sign) + a cumulative advance sum (`advanceUpTo`) precomputed once when the
+  run is created, making both functions O(log n) instead of O(n). `offsetForPosition` searches on
+  the cumulative sum itself, which is only monotonic if every advance is ≥ 0 (the normal case); a
+  sufficiently strong negative `letter-spacing`/`word-spacing` can make an advance negative — in
+  that case (rare, detected once per run at creation), the function falls back to the original
+  linear scan **verbatim**, to never risk a different result for a case that isn't proven
+  monotonic.
+  **Diagnosis refined during implementation**: this fix alone wasn't enough — measured empirically
+  (5000/10000/20000/40000 words: 0.8s/2.9s/11.4s/42s, still quadratic after the binary search
+  alone). Instrumentation via iteration counters: the dominant chunk was actually in
+  `TextShapeView::width()`, `maxAscentAndDescent()`, `draw()`, and `expansionOpportunityCount()` —
+  same pattern (walk every run of the shape from glyph 0 on every call, including runs entirely
+  outside the current view, which they scan for zero effect). Fixed with the same technique via a
+  new `rangeForView()` function: skip a run entirely out of range in O(1) (stopping the outer loop
+  as soon as the remaining runs are necessarily out of range too, since run order is ascending in
+  LTR / descending in RTL) and binary-search the first relevant glyph in the run overlapping the
+  view. Special case for `draw()`, which has a visible per-run side effect (cairo calls): unlike
+  the other three (pure, no effect for a skipped run), its outer loop still visits every run in the
+  same order and issues the same cairo calls for each — only the glyph scan itself is
+  shortened/skipped, leaving `numGlyphs` at 0 exactly as the original scan would for such a run.
+  Verified: near-linear scaling once all 4 methods were fixed (200k words: 40s+ timeout → 1.4s; 2x
+  → 3.7s; 4x → 11.0s — mildly superlinear beyond textshape.cpp itself, confirmed by iteration
+  counters that the fixed functions scale perfectly linearly with document size; the residual comes
+  from elsewhere in the pipeline, out of scope); V21's PoC (`make-multicol.py`) 60s timeout pre-fix
+  → 0.24s post-fix; **non-regression by byte-for-byte comparison** (pre-fix binary via `git stash` +
+  separate meson build) on 14 documents covering plain LTR multi-paragraph text, justified text,
+  mixed fonts/styles, ligatures, negative `letter-spacing` (fallback path included), Arabic RTL,
+  Hebrew RTL, mixed bidi text, tabs, edge cases, SVG text (`draw()` outside linelayout.cpp), and
+  reduced longtext/V21 PoCs — all byte-identical (PDF, plus PNG on 6 of these documents). (V21)
 
 ## Notes
 

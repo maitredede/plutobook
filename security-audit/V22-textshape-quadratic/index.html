@@ -15,7 +15,7 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 <h1>V22 &middot; TextShapeRun::positionForOffset/offsetForPosition are O(n²) per run</h1>
 <p><span class="badge sev-high">High</span> &nbsp; <span class="muted">Denial of service (CPU)</span></p>
 <div class="card">
-<div class="kv"><b>Status</b> <span class="status-todo">open</span></div>
+<div class="kv"><b>Status</b> <span class="status-done">fixed</span></div>
 <div class="kv"><b>Key file</b> <code>source/graphics/textshape.cpp</code></div>
 </div>
 
@@ -24,26 +24,78 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
  <code>offsetForPosition()</code> rescan the glyph array <em>from index 0</em> on every call. Line
  layout calls them once per line: for a long text run, each new line costs O(position) and the
  whole run becomes O(n&sup2;). Reproduces on plain paginated single-column text (independent of
- multicolumn): this is the real cause of the slowdown seen in V21's PoC.</p>
+ multicolumn).</p>
+ <p><strong>Diagnosis refined while fixing</strong>: fixing only these two functions (binary search
+ instead of the rescan) was <em>not</em> enough -- backed by empirical measurement
+ (5000/10000/20000/40000 words: 0.8s / 2.9s / 11.4s / 42s, still quadratic). Instrumentation via
+ iteration counters: the real dominant chunk was in <code>TextShapeView::width()</code>,
+ <code>maxAscentAndDescent()</code>, and <code>draw()</code> (and, by the same pattern,
+ <code>expansionOpportunityCount()</code>) -- these methods walk <em>every run of the shape</em> on
+ every call and, for any run entirely outside the current view's [startOffset,endOffset) range,
+ still scan the entirety of its glyphs to zero effect (no condition ever becomes true), purely to
+ "skip" it. Same situation as a single long run: viewing a late line revisits everything before it
+ on every call. Once these four methods were fixed in addition to the two named in the title, the
+ measured scaling becomes near-linear again (see Fix).</p>
 
 <h2>Location</h2>
-<ul><li><code>source/graphics/textshape.cpp</code> &mdash; positionForOffset/offsetForPosition rescan the glyph array from index 0 on every call</li><li><code>source/layout/linelayout.cpp</code> &mdash; called once per line during layout -&gt; O(position) per line</li></ul>
+<ul><li><code>source/graphics/textshape.cpp</code> &mdash; positionForOffset/offsetForPosition rescan the glyph array from index 0 on every call</li><li><code>source/graphics/textshape.cpp</code> &mdash; TextShapeView::width/maxAscentAndDescent/draw/expansionOpportunityCount also rescan every run from glyph 0</li><li><code>source/layout/linelayout.cpp</code> &mdash; called once per line during layout -&gt; O(position) per line</li></ul>
 
 <h2>Risk &amp; impact</h2>
 <p><strong>Impact</strong>: CPU hang/slowness (DoS) from a long text document (multicolumn
- or not). ~4-5x cost per line late in a document vs. early, measured.</p>
+ or not). ~4-5x cost per line late in a document vs. early, measured; without the complete fix (the
+ 4 <code>TextShapeView</code> methods included), the 200,000-word PoC still times out (&gt;40s) even
+ with the binary search applied to just the two functions named in this finding's title.</p>
 
 <h2>Reproduction</h2>
-<ol class="steps"><li>Generate poc/make-longtext.py (long single-column text), render: superlinear pre-fix, ~linear post-fix.</li><li>V21's multicolumn PoC also becomes bounded after this fix.</li></ol>
+<ol class="steps"><li>Generate poc/make-longtext.py (long single-column text), render: superlinear pre-fix (40s+ timeout), ~linear post-fix (1.4s).</li><li>V21's multicolumn PoC also becomes fast after this fix (60s timeout pre-fix -> 0.24s post-fix, measured on V21's poc/make-multicol.py).</li></ol>
 <p class="muted">Example files:</p>
 <ul><li><code>poc/make-longtext.py</code></li></ul>
 
 <h2>Proposed fix</h2>
-<p>Don't rescan from 0: resume from a cached cursor, or binary-search the (monotonic) glyph
- offsets, making the run O(n) (or O(n log n)).</p>
+<p>Binary search on (monotonic) glyph offsets instead of a rescan from 0:
+ <code>TextShapeRun::positionForOffset()</code>/<code>offsetForPosition()</code> become O(log n)
+ per call via a new private <code>glyphIndexForOffset()</code> method and a cumulative advance sum
+ (<code>advanceUpTo</code>) precomputed once when the run is created (O(n), amortized over every
+ later call). <code>positionForOffset</code> searches on <code>characterIndex</code>, monotonic by
+ HarfBuzz construction (ascending for LTR, descending for RTL) regardless of advance sign -- always
+ safe. <code>offsetForPosition</code> searches on the cumulative sum itself, which is only
+ monotonic if every advance is &ge; 0 (the normal case); a sufficiently strong negative
+ <code>letter-spacing</code>/<code>word-spacing</code> can make an advance negative -- in that case
+ (rare, detected once per run at creation), <code>offsetForPosition</code> falls back to the
+ original linear scan verbatim, to guarantee an identical result under every circumstance rather
+ than assuming a monotonicity that isn't guaranteed.</p>
+ <p>Necessary complement (see Nature): <code>TextShapeView::width()</code>,
+ <code>maxAscentAndDescent()</code>, <code>draw()</code>, and
+ <code>expansionOpportunityCount()</code> fixed for the same ailment with the same technique -- a
+ new <code>rangeForView()</code> function skips any run entirely outside the view in O(1) (and
+ stops the outer loop as soon as the remaining runs are necessarily out of range too, since run
+ order is ascending in LTR / descending in RTL) and uses <code>glyphIndexForOffset()</code> to jump
+ straight to the first relevant glyph of the run overlapping the view, instead of rescanning from
+ 0. Special case for <code>draw()</code>: it has a visible per-run side effect (cairo calls), so
+ unlike the other three (pure, no effect for a skipped run), its outer loop still visits <em>every</em>
+ run in the same order and issues the same cairo calls for each (only the glyph scan itself is
+ shortened/skipped, which leaves <code>numGlyphs</code> at 0 exactly as the original scan would for
+ such a run).</p>
 
 <h2>Configuration (default + configurable)</h2>
-<p>Algorithmic fix (no knob; text-node length is already bounded by V19).</p>
+<p>Algorithmic fix (no knob; text-node length is already bounded by V19). Verification --
+ <strong>scaling</strong>: poc/make-longtext.py (200k words) 40s+ timeout &rarr; 1.4s; at 2x (400k
+ words) 3.7s, at 4x (800k words) 11.0s (mildly superlinear beyond the textshape.cpp fix itself --
+ confirmed by iteration counters that the fixed <code>TextShapeView</code> and
+ <code>TextShapeRun</code> methods scale perfectly linearly with document size; the residual comes
+ from elsewhere in the pipeline, out of scope); 5000/10000/20000/40000 words go from
+ 0.8s/2.9s/11.4s/42s (quadratic, partial fix) to 0.075s/0.098s/0.15s/0.27s (near-linear, full fix).
+ <strong>V21 PoC</strong> (poc/make-multicol.py, 20000 words / 3 columns): 60s timeout pre-fix
+ (binary via <code>git stash</code> + separate build) &rarr; 0.24s post-fix.
+ <strong>Non-regression, byte-identical</strong> (pre-fix binary via <code>git stash</code> +
+ separate meson build, compared to the post-fix binary) on 14 documents: plain LTR
+ multi-paragraph, justified text (expansionOpportunityCount), mixed fonts/styles/sizes within one
+ line, ligature-heavy words (ffi/ffl/fi/fl), negative <code>letter-spacing</code> (fallback path
+ included), Arabic RTL (Noto Sans Arabic), Hebrew RTL (Noto Serif Hebrew), mixed LTR/RTL/RTL bidi
+ paragraph in one line, tabs, edge cases (empty/single-character/single-space paragraph), SVG text
+ (<code>TextShapeView::draw</code> path, distinct from linelayout.cpp), reduced longtext, reduced
+ V21 multicolumn PoC -- all PDF output byte-identical (<code>cmp</code>); 6 of these documents also
+ byte-identical as PNG output (<code>html2png</code>).</p>
 
 <footer>PlutoBook &mdash; red-team security audit. Static report generated for human reading.
 Threat model: untrusted input (server-side rendering of arbitrary HTML/SVG/CSS).</footer>

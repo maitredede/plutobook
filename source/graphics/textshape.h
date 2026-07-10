@@ -24,6 +24,7 @@ struct TextShapeRunGlyphData : public HeapMember {
     float xOffset;
     float yOffset;
     float advance;
+    float advanceUpTo; // sum of `advance` over glyphs [0, this] in array order; precomputed once by TextShapeRun so offset/position lookups can binary search instead of rescanning from 0.
 };
 
 class TextShapeRunGlyphDataList {
@@ -57,6 +58,8 @@ public:
     float positionForVisualOffset(uint32_t offset, Direction direction) const;
     uint32_t offsetForPosition(float position, Direction direction) const;
 
+    uint32_t glyphIndexForOffset(uint32_t offset, Direction direction) const;
+
 private:
     TextShapeRun(const SimpleFontData* fontData, uint32_t offset, uint32_t length, float width, TextShapeRunGlyphDataList glyphs);
     const SimpleFontData* m_fontData;
@@ -64,6 +67,7 @@ private:
     uint32_t m_length;
     float m_width;
     TextShapeRunGlyphDataList m_glyphs;
+    bool m_advancesNonNegative;
 };
 
 using TextShapeRunList = std::pmr::vector<std::unique_ptr<TextShapeRun>>;
