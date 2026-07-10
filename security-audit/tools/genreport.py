@@ -1040,6 +1040,39 @@ print("multicol.html ecrit")
  status="done",
 )
 
+add(
+ id="V22", slug="V22-textshape-quadratic", severity="haute", cat="Deni de service (CPU)",
+ title="TextShapeRun::positionForOffset/offsetForPosition en O(n²) par run",
+ keyfile="source/graphics/textshape.cpp",
+ locations=[
+   ("source/graphics/textshape.cpp", "positionForOffset/offsetForPosition rescannent les glyphes depuis l'index 0 a chaque appel"),
+   ("source/layout/linelayout.cpp", "appelees par ligne lors du layout -> O(position) par ligne"),
+ ],
+ nature="""<p>Decouvert en diagnostiquant V21. <code>TextShapeRun::positionForOffset()</code> et
+ <code>offsetForPosition()</code> reparcourent le tableau de glyphes <em>depuis l'index 0</em> a chaque
+ appel. Le line layout les appelle une fois par ligne : pour un long run de texte, chaque nouvelle
+ ligne coute O(position) et le run entier devient O(n&sup2;). Se reproduit sur du texte simple colonne
+ pagine (independant du multicolonne) : c'est la vraie cause du ralentissement du PoC de V21.</p>""",
+ risk="""<p><strong>Impact</strong> : hang/lenteur CPU (DoS) a partir d'un long document texte
+ (multicolonne ou non). Cout ~4-5x par ligne en fin de document vs debut, mesure.</p>""",
+ repro=[
+   "Generer poc/make-longtext.py (long texte simple colonne), rendre : superlineaire pre-fix, ~lineaire post-fix.",
+   "Le PoC multicolonne de V21 devient egalement borne apres ce correctif.",
+ ],
+ poc={
+  "make-longtext.py": """#!/usr/bin/env python3
+# Long run de texte simple colonne (beaucoup de lignes) pour exercer positionForOffset O(n^2).
+para = ("mot " * 200000).strip()
+open("longtext.html", "w").write(
+  "<!DOCTYPE html><html><body><p>" + para + "</p></body></html>")
+print("longtext.html ecrit")
+""",
+ },
+ fix="""<p>Ne pas rescanner depuis 0 : reprendre depuis un curseur memorise, ou faire une recherche
+ dichotomique sur les offsets de glyphes (monotones), rendant le run O(n) (ou O(n log n)).</p>""",
+ config="Correctif algorithmique (pas de knob ; la longueur de noeud texte est deja bornee en V19).",
+)
+
 # ---------------------------------------------------------------------------
 # Rendu HTML
 # ---------------------------------------------------------------------------

@@ -12,9 +12,9 @@ d.setAttribute('data-theme',c);localStorage.setItem('pb-theme',c);};});})();
 </head><body><div class="wrap">
 <button class="toggle" id="tg">theme</button>
 <h1>PlutoBook &mdash; Rapport d'audit de securite</h1>
-<p class="lead">Audit red-team du moteur de rendu HTML/XML/CSS/SVG &rarr; PDF. 21 problemes,
+<p class="lead">Audit red-team du moteur de rendu HTML/XML/CSS/SVG &rarr; PDF. 22 problemes,
 classes par criticite.</p>
-<p><span class="badge sev-crit">2 Critique</span> &middot; <span class="badge sev-high">8 Haute</span> &middot; <span class="badge sev-medhigh">2 Moyenne+</span> &middot; <span class="badge sev-med">4 Moyenne</span> &middot; <span class="badge sev-low">4 Basse</span> &middot; <span class="badge sev-info">1 Info</span></p>
+<p><span class="badge sev-crit">2 Critique</span> &middot; <span class="badge sev-high">9 Haute</span> &middot; <span class="badge sev-medhigh">2 Moyenne+</span> &middot; <span class="badge sev-med">4 Moyenne</span> &middot; <span class="badge sev-low">4 Basse</span> &middot; <span class="badge sev-info">1 Info</span></p>
 
 <div class="card">
 <h3 style="margin-top:0">Resume executif</h3>
@@ -111,6 +111,14 @@ est non recuperable.</p>
 <td>Deni de service (CPU)</td>
 <td><code>source/layout/tablebox.cpp</code></td>
 <td><span class="status-done">corrige</span></td>
+</tr>
+<tr>
+<td><a href="V22-textshape-quadratic/">V22</a></td>
+<td><a href="V22-textshape-quadratic/">TextShapeRun::positionForOffset/offsetForPosition en O(n²) par run</a></td>
+<td><span class="badge sev-high">Haute</span></td>
+<td>Deni de service (CPU)</td>
+<td><code>source/graphics/textshape.cpp</code></td>
+<td><span class="status-todo">a corriger</span></td>
 </tr>
 <tr>
 <td><a href="V09-page-count/">V09</a></td>

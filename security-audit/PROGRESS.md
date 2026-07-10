@@ -32,9 +32,12 @@ problème non coché. Un commit par problème (voir `FIX-GUIDE.md`). **Pousser a
 | [x] | V19 | `Heap::concatenateString` O(n²) | Haute | voir git log |
 | [x] | V20 | Layout tables imbriquées exponentiel | Haute | voir git log |
 | [x] | V21 | Balancing multicolonne superlinéaire | Moyenne | voir git log |
+| [ ] | V22 | TextShape positionForOffset O(n²) (vraie cause de V21) | Haute | — |
 
 **V01–V16 corrigés** (rebuild propre OK, PoC intégrés vérifiés). **V17–V21** = problèmes découverts
-pendant les correctifs, désormais suivis et traités dans l'ordre : V17 → V18 → V19 → V20 → V21.
+pendant les correctifs. **V22** = découvert en diagnostiquant V21 : le coût superlinéaire réel du PoC
+multicolonne est un O(n²) de shaping de texte (`textshape.cpp`), qui touche aussi tout long document
+simple colonne. V21 a borné le balancing (défensif) ; V22 corrige la vraie cause.
 
 ## Détails des problèmes de suivi (V17–V21)
 
