@@ -1,5 +1,19 @@
 /build
+/build-*
 /subprojects/*
 !/subprojects/*.wrap
 !/subprojects/packagefiles
 *.user
+
+# Artefacts generes par les PoC de security-audit (ne jamais committer a la racine)
+/bomb.svg
+/bomb.png
+/deep.html
+/deep.css.html
+/odd.bmp
+/evil.ttf
+/entity-bomb.xml
+/multicol.html
+/longtext.html
+/nested-tables.html
+/repro.html
